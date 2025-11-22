@@ -1,18 +1,16 @@
-import { Layers, AlertTriangle, Lightbulb, Store, Users, Map } from 'lucide-react';
+import { Layers, Lightbulb, Store, Users, Map } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
 interface SafetyLayersProps {
   activeLayers: {
-    crime: boolean;
-    lighting: boolean;
     businesses: boolean;
     userReports: boolean;
     heatmap: boolean;
     lightingHeatmap: boolean;
   };
-  onLayerToggle: (layer: 'crime' | 'lighting' | 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => void;
+  onLayerToggle: (layer: 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => void;
 }
 
 const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
@@ -24,34 +22,6 @@ const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-danger" />
-            <Label htmlFor="crime-layer" className="cursor-pointer">
-              Recent Crime
-            </Label>
-          </div>
-          <Switch
-            id="crime-layer"
-            checked={activeLayers.crime}
-            onCheckedChange={() => onLayerToggle('crime')}
-          />
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-warning" />
-            <Label htmlFor="lighting-layer" className="cursor-pointer">
-              Street Lighting
-            </Label>
-          </div>
-          <Switch
-            id="lighting-layer"
-            checked={activeLayers.lighting}
-            onCheckedChange={() => onLayerToggle('lighting')}
-          />
-        </div>
-
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Store className="h-4 w-4 text-accent" />

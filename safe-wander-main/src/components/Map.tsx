@@ -20,21 +20,20 @@ interface MapProps {
   lightingData?: any[];
   communityReports?: any[];
   activeLayers: {
-    crime: boolean;
-    lighting: boolean;
     businesses: boolean;
     userReports: boolean;
     heatmap: boolean;
     lightingHeatmap: boolean;
   };
   onMapClick?: (lat: number, lng: number) => void;
+  routeOrigin?: { lat: number; lng: number; address: string } | null;
   routeDestination?: { lat: number; lng: number; address: string } | null;
   userLocation?: { lat: number; lng: number } | null;
   isReportMode?: boolean;
   pendingReportType?: string | null;
 }
 
-const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick, routeDestination, userLocation, isReportMode = false, pendingReportType = null }: MapProps) => {
+const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick, routeOrigin, routeDestination, userLocation, isReportMode = false, pendingReportType = null }: MapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
@@ -471,7 +470,12 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
 
   // Handle route calculation and rendering with safe waypoints
   useEffect(() => {
-    if (!mapInstanceRef.current || !routeDestination || !userLocation) return;
+    if (!mapInstanceRef.current || !routeDestination) return;
+    
+    // Use routeOrigin if provided, otherwise fall back to userLocation
+    const origin = routeOrigin || userLocation;
+    if (!origin) return;
+    
     if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) return;
 
     const directionsService = new google.maps.DirectionsService();
@@ -483,7 +487,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
     const useSafeRoute = activeLayers.heatmap && heatmapDataRef.current && heatmapDataRef.current.cells.length > 0;
 
     const routeRequest: google.maps.DirectionsRequest = {
-      origin: new google.maps.LatLng(userLocation.lat, userLocation.lng),
+      origin: new google.maps.LatLng(origin.lat, origin.lng),
       destination: new google.maps.LatLng(routeDestination.lat, routeDestination.lng),
       travelMode: google.maps.TravelMode.WALKING,
     };
@@ -491,7 +495,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
     if (useSafeRoute && heatmapDataRef.current) {
       // Find safe waypoints
       const waypoints = findSafeWaypoints(
-        userLocation,
+        origin,
         routeDestination,
         heatmapDataRef.current,
         3
@@ -535,7 +539,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
         toast.error('Failed to calculate route');
       }
     });
-  }, [routeDestination, userLocation, activeLayers.heatmap, heatmapData]);
+  }, [routeOrigin, routeDestination, userLocation, activeLayers.heatmap, heatmapData]);
 
   // Update markers based on active layers
   useEffect(() => {
@@ -544,60 +548,6 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
     // Clear existing markers
     markersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];
-
-    // Add crime markers
-    if (activeLayers.crime && crimeData.length > 0) {
-      crimeData.forEach((crime) => {
-        const marker = new google.maps.Marker({
-          position: { lat: crime.lat, lng: crime.lng },
-          map: mapInstanceRef.current,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: crime.severity === 'high' ? 8 : crime.severity === 'medium' ? 6 : 4,
-            fillColor: crime.severity === 'high' ? '#ef4444' : crime.severity === 'medium' ? '#f97316' : '#fbbf24',
-            fillOpacity: 0.7,
-            strokeColor: '#ffffff',
-            strokeWeight: 1,
-          },
-          title: `${crime.type} - ${crime.description}`,
-        });
-
-        const infoWindow = new google.maps.InfoWindow({
-          content: `<div style="color: #000; padding: 8px;">
-            <strong>${crime.type.toUpperCase()}</strong><br/>
-            ${crime.description}<br/>
-            <small>Severity: ${crime.severity}</small>
-          </div>`,
-        });
-
-        marker.addListener('click', () => {
-          infoWindow.open(mapInstanceRef.current, marker);
-        });
-
-        markersRef.current.push(marker);
-      });
-    }
-
-    // Add lighting markers
-    if (activeLayers.lighting && lightingData.length > 0) {
-      lightingData.forEach((light) => {
-        const marker = new google.maps.Marker({
-          position: { lat: light.lat, lng: light.lng },
-          map: mapInstanceRef.current,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 5,
-            fillColor: light.level === 'high' ? '#10b981' : light.level === 'medium' ? '#fbbf24' : '#ef4444',
-            fillOpacity: 0.6,
-            strokeColor: '#ffffff',
-            strokeWeight: 1,
-          },
-          title: `Lighting: ${light.level}`,
-        });
-
-        markersRef.current.push(marker);
-      });
-    }
 
     // Add community report markers
     if (activeLayers.userReports && communityReports.length > 0) {
@@ -641,7 +591,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
         markersRef.current.push(marker);
       });
     }
-  }, [activeLayers, crimeData, lightingData, communityReports]);
+  }, [activeLayers, communityReports]);
 
   return (
     <div className="relative w-full h-full">

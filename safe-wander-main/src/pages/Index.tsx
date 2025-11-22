@@ -16,8 +16,6 @@ import { fetchNearbyPlaces, SafePlace } from '@/lib/placesUtils';
 
 const Index = () => {
   const [activeLayers, setActiveLayers] = useState({
-    crime: true,
-    lighting: true,
     businesses: false,
     userReports: true,
     heatmap: false,
@@ -33,6 +31,7 @@ const Index = () => {
   const [pendingReport, setPendingReport] = useState<{ type: string; description: string } | null>(null);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [routeOrigin, setRouteOrigin] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [routeDestination, setRouteDestination] = useState<{ lat: number; lng: number; address: string } | null>(null);
 
   console.log("communityReports", communityReports)
@@ -117,7 +116,7 @@ const Index = () => {
     loadNearbyPlaces();
   }, [userLocation, mapInstance, loadNearbyPlaces]);
 
-  const handleLayerToggle = (layer: 'crime' | 'lighting' | 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => {
+  const handleLayerToggle = (layer: 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => {
     setActiveLayers((prev) => ({
       ...prev,
       [layer]: !prev[layer],
@@ -157,15 +156,35 @@ const Index = () => {
     setMapInstance(map);
   };
 
-  const handleRouteRequest = useCallback((destination: { 
-    placeId: string; 
-    address: string; 
-    lat: number; 
-    lng: number 
-  }) => {
-    if (!userLocation) {
-      toast.error('User location not available. Please enable location services.');
+  const handleRouteRequest = useCallback((
+    origin: { 
+      placeId: string; 
+      address: string; 
+      lat: number; 
+      lng: number 
+    } | null,
+    destination: { 
+      placeId: string; 
+      address: string; 
+      lat: number; 
+      lng: number 
+    }
+  ) => {
+    // If no origin provided, check if user location is available
+    if (!origin && !userLocation) {
+      toast.error('Please provide a starting point or enable location services.');
       return;
+    }
+    
+    // Set origin if provided, otherwise will use userLocation in Map component
+    if (origin) {
+      setRouteOrigin({
+        lat: origin.lat,
+        lng: origin.lng,
+        address: origin.address,
+      });
+    } else {
+      setRouteOrigin(null);
     }
     
     setRouteDestination({
@@ -173,7 +192,9 @@ const Index = () => {
       lng: destination.lng,
       address: destination.address,
     });
-    toast.success(`Route to ${destination.address} calculated!`);
+    
+    const originText = origin ? origin.address : 'your location';
+    toast.success(`Route from ${originText} to ${destination.address} calculated!`);
   }, [userLocation]);
 
 
@@ -258,6 +279,7 @@ const Index = () => {
             activeLayers={activeLayers}
             onMapClick={handleMapClick}
             onMapLoad={handleMapLoad}
+            routeOrigin={routeOrigin}
             routeDestination={routeDestination}
             userLocation={userLocation}
             isReportMode={!!pendingReport}
