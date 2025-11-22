@@ -80,12 +80,42 @@ const Index = () => {
   const loadNearbyPlaces = useCallback(async () => {
     if (!userLocation) return;
     
+    // Make sure Google Maps Places API is loaded
+    if (!window.google || !window.google.maps || !window.google.maps.places) {
+      console.warn('Google Maps Places API not loaded yet');
+      return;
+    }
+    
     setIsLoadingPlaces(true);
     try {
       const places = await fetchNearbyPlaces(userLocation.lat, userLocation.lng, 2000, mapInstance);
       setSafePlaces(places);
       if (places.length > 0) {
         toast.success(`Found ${places.length} nearby safe places`);
+      } else {
+        // No places found, try fallback to mock data
+        console.warn('No places found from Google Places API, using fallback data');
+        fetch('/data/safe-places.json')
+          .then(res => res.json())
+          .then(mockPlaces => {
+            // Update distances for mock places based on user location
+            const updatedPlaces = mockPlaces.map((place: any) => {
+              const distanceMeters = Math.sqrt(
+                Math.pow((place.lat - userLocation.lat) * 111000, 2) +
+                Math.pow((place.lng - userLocation.lng) * 111000 * Math.cos(userLocation.lat * Math.PI / 180), 2)
+              );
+              return {
+                ...place,
+                distanceMeters,
+                distance: distanceMeters < 1000 ? `${Math.round(distanceMeters)}m` : `${(distanceMeters / 1000).toFixed(1)}km`
+              };
+            });
+            setSafePlaces(updatedPlaces);
+            toast.info('Using default safe places data');
+          })
+          .catch(() => {
+            toast.warning('No safe places available');
+          });
       }
     } catch (error) {
       console.error('Error fetching nearby places:', error);
@@ -93,8 +123,24 @@ const Index = () => {
       // Fallback to mock data
       fetch('/data/safe-places.json')
         .then(res => res.json())
-        .then(places => setSafePlaces(places))
-        .catch(() => {});
+        .then(places => {
+          // Update distances for mock places based on user location
+          const updatedPlaces = places.map((place: any) => {
+            const distanceMeters = Math.sqrt(
+              Math.pow((place.lat - userLocation.lat) * 111000, 2) +
+              Math.pow((place.lng - userLocation.lng) * 111000 * Math.cos(userLocation.lat * Math.PI / 180), 2)
+            );
+            return {
+              ...place,
+              distanceMeters,
+              distance: distanceMeters < 1000 ? `${Math.round(distanceMeters)}m` : `${(distanceMeters / 1000).toFixed(1)}km`
+            };
+          });
+          setSafePlaces(updatedPlaces);
+        })
+        .catch(() => {
+          toast.error('Failed to load safe places data');
+        });
     } finally {
       setIsLoadingPlaces(false);
     }
@@ -103,17 +149,26 @@ const Index = () => {
   // Fetch nearby places when user location and Google Maps are available
   useEffect(() => {
     if (!userLocation) return;
-    if (!window.google || !window.google.maps || !window.google.maps.places) {
-      // Wait a bit for Google Maps to load
-      const timer = setTimeout(() => {
-        if (window.google && window.google.maps && window.google.maps.places) {
-          loadNearbyPlaces();
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
     
-    loadNearbyPlaces();
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    // Wait for Google Maps Places API to be fully loaded
+    const checkAndLoad = () => {
+      if (window.google && window.google.maps && window.google.maps.places) {
+        loadNearbyPlaces();
+      } else {
+        // Retry after a short delay
+        timeoutId = setTimeout(checkAndLoad, 500);
+      }
+    };
+    
+    checkAndLoad();
+    
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [userLocation, mapInstance, loadNearbyPlaces]);
 
   const handleLayerToggle = (layer: 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => {

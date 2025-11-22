@@ -11,6 +11,7 @@ interface SafePlace {
   lat: number;
   lng: number;
   open24h: boolean;
+  isOpen?: boolean; // Whether the place is currently open
   hoursUntilClose?: number;
   distance: string;
 }
@@ -75,15 +76,25 @@ const NearbySafePlaces = ({ places, onPlaceSelect, isLoading = false }: NearbySa
                     <h4 className="font-medium text-sm text-foreground truncate">
                       {place.name}
                     </h4>
-                    {place.open24h ? (
-                      <Badge variant="outline" className="bg-success/10 text-success border-success/20 shrink-0">
-                        24/7
-                      </Badge>
-                    ) : place.hoursUntilClose ? (
-                      <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 shrink-0">
-                        {place.hoursUntilClose}h
-                      </Badge>
-                    ) : null}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {place.isOpen !== undefined && (
+                        <Badge 
+                          variant="outline" 
+                          className={
+                            place.isOpen 
+                              ? "bg-success/10 text-success border-success/20" 
+                              : "bg-destructive/10 text-destructive border-destructive/20"
+                          }
+                        >
+                          {place.isOpen ? 'Open' : 'Closed'}
+                        </Badge>
+                      )}
+                      {place.open24h && (
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                          24/7
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground capitalize mb-2">
                     {place.type.replace('_', ' ')}
