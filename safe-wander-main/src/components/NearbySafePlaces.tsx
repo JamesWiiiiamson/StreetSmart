@@ -1,8 +1,9 @@
-import { MapPin, Clock, Navigation, Fuel, Coffee, ShoppingCart, Train, Dumbbell, Cross } from 'lucide-react';
+import { MapPin, Clock, Navigation, Fuel, Coffee, ShoppingCart, Train, Dumbbell, Cross, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { useState } from 'react';
 
 interface SafePlace {
   id: string;
@@ -14,6 +15,7 @@ interface SafePlace {
   isOpen?: boolean; // Whether the place is currently open
   hoursUntilClose?: number;
   distance: string;
+  openingHours?: string[]; // Array of formatted opening hours
 }
 
 interface NearbySafePlacesProps {
@@ -23,6 +25,20 @@ interface NearbySafePlacesProps {
 }
 
 const NearbySafePlaces = ({ places, onPlaceSelect, isLoading = false }: NearbySafePlacesProps) => {
+  const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (placeId: string) => {
+    setExpandedPlaces(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(placeId)) {
+        newSet.delete(placeId);
+      } else {
+        newSet.add(placeId);
+      }
+      return newSet;
+    });
+  };
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'pharmacy':
@@ -59,36 +75,29 @@ const NearbySafePlaces = ({ places, onPlaceSelect, isLoading = false }: NearbySa
           </div>
         ) : places.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <p className="text-sm text-muted-foreground">No nearby places found</p>
+            <p className="text-sm text-muted-foreground">No open places found nearby</p>
           </div>
         ) : (
           <div className="space-y-3">
             {places.map((place) => (
             <Card
               key={place.id}
-              className="p-3 bg-secondary border-border hover:border-primary transition-colors cursor-pointer"
-              onClick={() => onPlaceSelect(place)}
+              className="p-3 bg-secondary border-border hover:border-primary transition-colors"
             >
               <div className="flex items-start gap-3">
                 <div className="mt-1">{getIcon(place.type)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <h4 className="font-medium text-sm text-foreground truncate">
+                    <h4 
+                      className="font-medium text-sm text-foreground truncate cursor-pointer"
+                      onClick={() => onPlaceSelect(place)}
+                    >
                       {place.name}
                     </h4>
                     <div className="flex items-center gap-1 shrink-0">
-                      {place.isOpen !== undefined && (
-                        <Badge 
-                          variant="outline" 
-                          className={
-                            place.isOpen 
-                              ? "bg-success/10 text-success border-success/20" 
-                              : "bg-destructive/10 text-destructive border-destructive/20"
-                          }
-                        >
-                          {place.isOpen ? 'Open' : 'Closed'}
-                        </Badge>
-                      )}
+                      <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                        Open
+                      </Badge>
                       {place.open24h && (
                         <Badge variant="outline" className="bg-success/10 text-success border-success/20">
                           24/7
@@ -99,18 +108,52 @@ const NearbySafePlaces = ({ places, onPlaceSelect, isLoading = false }: NearbySa
                   <p className="text-xs text-muted-foreground capitalize mb-2">
                     {place.type.replace('_', ' ')}
                   </p>
-                  <div className="flex items-center gap-4 text-xs">
+                  <div className="flex items-center gap-4 text-xs mb-2">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Navigation className="h-3 w-3" />
                       <span>{place.distance}</span>
                     </div>
-                    {!place.open24h && place.hoursUntilClose && (
+                    {!place.open24h && place.hoursUntilClose !== undefined && (
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        <span>Closes in {place.hoursUntilClose}h</span>
+                        <span>
+                          {place.hoursUntilClose < 1 
+                            ? `Closes in ${Math.round(place.hoursUntilClose * 60)}min`
+                            : `Closes in ${place.hoursUntilClose.toFixed(1)}h`
+                          }
+                        </span>
                       </div>
                     )}
                   </div>
+                  
+                  {/* Opening Hours */}
+                  {place.openingHours && place.openingHours.length > 0 && (
+                    <div className="mt-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleExpanded(place.id);
+                        }}
+                        className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors w-full"
+                      >
+                        {expandedPlaces.has(place.id) ? (
+                          <ChevronUp className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                        <span>Opening Hours</span>
+                      </button>
+                      {expandedPlaces.has(place.id) && (
+                        <div className="mt-2 pl-4 space-y-1">
+                          {place.openingHours.map((hours, index) => (
+                            <p key={index} className="text-xs text-muted-foreground">
+                              {hours}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>

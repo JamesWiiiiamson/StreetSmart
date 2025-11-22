@@ -15,6 +15,7 @@ export interface SafePlace {
   distanceMeters: number;
   placeId?: string;
   address?: string;
+  openingHours?: string[]; // Array of formatted opening hours (e.g., ["Monday: 9:00 AM – 5:00 PM", ...])
 }
 
 /**
@@ -64,23 +65,106 @@ function mapPlaceType(types: string[]): string {
 }
 
 /**
- * Check if a place is open 24/7 (heuristic based on name and type)
+ * Check if a place is open 24/7 based on opening hours data
  */
 function isOpen24h(place: google.maps.places.PlaceResult): boolean {
   const name = place.name?.toLowerCase() || '';
   const types = place.types || [];
   
-  // Gas stations and pharmacies are often 24/7
-  if (types.includes('gas_station')) return true;
-  if (types.includes('pharmacy') && name.includes('shoppers')) return true;
-  
-  // Check opening hours if available
-  if (place.opening_hours?.open_now !== undefined) {
-    // If it's open now and has 24/7 in the name, likely 24/7
-    if (name.includes('24') || name.includes('24/7')) return true;
+  // Check if opening hours indicate 24/7 operation
+  if (place.opening_hours?.periods) {
+    const periods = place.opening_hours.periods;
+    // If all days have the same open/close time and it spans 24 hours, it's 24/7
+    if (periods.length === 7) {
+      const allSame = periods.every(period => {
+        if (!period.open || !period.close) return false;
+        const openTime = period.open.time;
+        const closeTime = period.close.time;
+        // Check if open time is 0000 and close time is 2359 (or next day)
+        return openTime === '0000' && (closeTime === '2359' || closeTime === '0000');
+      });
+      if (allSame) return true;
+    }
   }
   
+  // Heuristic checks
+  if (types.includes('gas_station')) return true;
+  if (types.includes('pharmacy') && name.includes('shoppers')) return true;
+  if (name.includes('24') || name.includes('24/7')) return true;
+  
   return false;
+}
+
+/**
+ * Calculate hours until close from opening hours data
+ * Returns undefined if cannot be calculated
+ */
+function calculateHoursUntilClose(openingHours: google.maps.places.PlaceOpeningHours | undefined): number | undefined {
+  if (!openingHours || !openingHours.periods || !openingHours.open_now) {
+    return undefined;
+  }
+
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const currentTime = now.getHours() * 100 + now.getMinutes(); // HHMM format
+
+  // Find today's period
+  const todayPeriod = openingHours.periods.find(period => {
+    if (!period.open) return false;
+    // Google uses 0 = Sunday, same as JavaScript Date.getDay()
+    return period.open.day === currentDay;
+  });
+
+  if (!todayPeriod) {
+    return undefined;
+  }
+
+  // If no close time, it might be open 24 hours or closes next day
+  if (!todayPeriod.close) {
+    // Check if there's a close time for tomorrow (indicates it closes after midnight)
+    const nextDay = (currentDay + 1) % 7;
+    const nextDayPeriod = openingHours.periods.find(period => {
+      if (!period.open) return false;
+      return period.open.day === nextDay;
+    });
+    
+    if (nextDayPeriod && nextDayPeriod.close) {
+      const nextCloseTime = parseInt(nextDayPeriod.close.time, 10);
+      // Calculate hours until close tomorrow
+      const hoursUntilMidnight = (24 * 100 - currentTime) / 100;
+      const hoursAfterMidnight = nextCloseTime / 100;
+      return Math.round((hoursUntilMidnight + hoursAfterMidnight) * 10) / 10;
+    }
+    // No close time found, might be 24/7 or unknown
+    return undefined;
+  }
+
+  const closeTime = parseInt(todayPeriod.close.time, 10);
+  
+  // If close time is before current time, check if it closes tomorrow
+  if (closeTime < currentTime) {
+    // Check next day's period
+    const nextDay = (currentDay + 1) % 7;
+    const nextDayPeriod = openingHours.periods.find(period => {
+      if (!period.open) return false;
+      return period.open.day === nextDay;
+    });
+    
+    if (nextDayPeriod && nextDayPeriod.close) {
+      const nextCloseTime = parseInt(nextDayPeriod.close.time, 10);
+      // Calculate hours until close tomorrow
+      const hoursUntilMidnight = (24 * 100 - currentTime) / 100;
+      const hoursAfterMidnight = nextCloseTime / 100;
+      return Math.round((hoursUntilMidnight + hoursAfterMidnight) * 10) / 10;
+    }
+    // If no next day close time, the place might have closed for today
+    // but we know it's open_now, so it might close tomorrow
+    return undefined;
+  }
+
+  // Calculate hours until close today
+  const hoursUntilClose = (closeTime - currentTime) / 100;
+  return Math.round(hoursUntilClose * 10) / 10;
 }
 
 /**
@@ -143,20 +227,24 @@ export async function fetchNearbyPlaces(
                 // Try to get open_now from nearbySearch if available, but we'll fetch details later
                 const isOpenFromNearby = place.opening_hours?.open_now;
                 
-                allPlaces.push({
-                  id: place.place_id || `place-${type}-${index}`,
-                  name: place.name || 'Unknown Place',
-                  type: mapPlaceType(place.types || []),
-                  lat,
-                  lng,
-                  open24h,
-                  // Only set isOpen if we have it from nearbySearch, otherwise will get from Place Details
-                  isOpen: isOpenFromNearby !== undefined ? isOpenFromNearby : (open24h ? true : undefined),
-                  distance: formatDistance(distanceMeters),
-                  distanceMeters,
-                  placeId: place.place_id,
-                  address: place.vicinity || place.formatted_address,
-                });
+                // Only add places that are open or might be open (don't add if we know they're closed)
+                // We'll filter more precisely after getting Place Details
+                if (isOpenFromNearby !== false) {
+                  allPlaces.push({
+                    id: place.place_id || `place-${type}-${index}`,
+                    name: place.name || 'Unknown Place',
+                    type: mapPlaceType(place.types || []),
+                    lat,
+                    lng,
+                    open24h,
+                    // Only set isOpen if we have it from nearbySearch, otherwise will get from Place Details
+                    isOpen: isOpenFromNearby !== undefined ? isOpenFromNearby : (open24h ? true : undefined),
+                    distance: formatDistance(distanceMeters),
+                    distanceMeters,
+                    placeId: place.place_id,
+                    address: place.vicinity || place.formatted_address,
+                  });
+                }
               }
             }
           });
@@ -189,18 +277,38 @@ export async function fetchNearbyPlaces(
         return;
       }
 
-      // Use Place Details API to get opening hours
+      // Use Place Details API to get opening hours and business status
       const detailsRequest: google.maps.places.PlaceDetailsRequest = {
         placeId: place.placeId,
-        fields: ['opening_hours', 'name', 'types'],
+        fields: ['opening_hours', 'name', 'types', 'business_status'],
       };
 
       placesService.getDetails(detailsRequest, (placeDetails, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && placeDetails) {
+          // Check if permanently closed
+          if (placeDetails.business_status === 'CLOSED_PERMANENTLY') {
+            placesWithDetails.push({
+              ...place,
+              isOpen: false,
+              open24h: false,
+            });
+            resolve();
+            return;
+          }
+
           // Get opening hours from place details
           const openingHours = placeDetails.opening_hours;
           const isOpen = openingHours?.open_now ?? null;
           const open24h = isOpen24h(placeDetails) || place.open24h;
+          
+          // Extract weekday_text for opening hours display
+          const openingHoursText = openingHours?.weekday_text || [];
+          
+          // Calculate hours until close if place is open
+          let hoursUntilClose: number | undefined = undefined;
+          if (isOpen === true && !open24h) {
+            hoursUntilClose = calculateHoursUntilClose(openingHours);
+          }
           
           // Determine if place is open
           let finalIsOpen: boolean | undefined;
@@ -212,17 +320,25 @@ export async function fetchNearbyPlaces(
             finalIsOpen = undefined; // Unknown status
           }
           
-          placesWithDetails.push({
-            ...place,
-            isOpen: finalIsOpen,
-            open24h: open24h,
-          });
-        } else {
-          // If details fetch fails, use the place as-is but try to infer from initial data
-          if (place.isOpen === undefined && place.open24h) {
-            place.isOpen = true; // If 24/7, assume open
+          // Only add places that are currently open
+          if (finalIsOpen === true) {
+            placesWithDetails.push({
+              ...place,
+              isOpen: finalIsOpen,
+              open24h: open24h,
+              hoursUntilClose: hoursUntilClose,
+              openingHours: openingHoursText,
+            });
           }
-          placesWithDetails.push(place);
+        } else {
+          // If details fetch fails, only add if we can confirm it's open
+          // (e.g., 24/7 places or places marked as open from nearby search)
+          if (place.isOpen === true || (place.isOpen === undefined && place.open24h)) {
+            if (place.isOpen === undefined && place.open24h) {
+              place.isOpen = true; // If 24/7, assume open
+            }
+            placesWithDetails.push(place);
+          }
         }
         resolve();
       });
@@ -231,19 +347,10 @@ export async function fetchNearbyPlaces(
 
   await Promise.all(detailPromises);
 
-  // Sort: open places first, then by distance
-  return placesWithDetails
-    .sort((a, b) => {
-      // Prioritize open places (true > false > undefined)
-      const aOpen = a.isOpen === true ? 2 : (a.isOpen === false ? 0 : 1);
-      const bOpen = b.isOpen === true ? 2 : (b.isOpen === false ? 0 : 1);
-      
-      if (aOpen !== bOpen) {
-        return bOpen - aOpen; // Open places first
-      }
-      
-      // If both have same open status, sort by distance
-      return a.distanceMeters - b.distanceMeters;
-    });
+  // Filter to only include places that are currently open
+  const openPlaces = placesWithDetails.filter(place => place.isOpen === true);
+
+  // Sort by distance (all are open, so no need to prioritize by open status)
+  return openPlaces.sort((a, b) => a.distanceMeters - b.distanceMeters);
 }
 
