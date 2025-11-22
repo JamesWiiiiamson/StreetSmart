@@ -1,0 +1,58 @@
+[
+  {
+    "id": "safe-1",
+    "name": "Shoppers Drug Mart",
+    "type": "pharmacy",
+    "lat": 43.6542,
+    "lng": -79.3822,
+    "open24h": true,
+    "distance": "200m"
+  },
+  {
+    "id": "safe-2",
+    "name": "Shell Gas Station",
+    "type": "gas_station",
+    "lat": 43.6572,
+    "lng": -79.3892,
+    "open24h": true,
+    "distance": "450m"
+  },
+  {
+    "id": "safe-3",
+    "name": "Tim Hortons",
+    "type": "restaurant",
+    "lat": 43.6512,
+    "lng": -79.3772,
+    "open24h": false,
+    "hoursUntilClose": 2,
+    "distance": "320m"
+  },
+  {
+    "id": "safe-4",
+    "name": "Metro Grocery",
+    "type": "grocery",
+    "lat": 43.6592,
+    "lng": -79.3872,
+    "open24h": false,
+    "hoursUntilClose": 1,
+    "distance": "580m"
+  },
+  {
+    "id": "safe-5",
+    "name": "King Station",
+    "type": "subway",
+    "lat": 43.6482,
+    "lng": -79.3842,
+    "open24h": false,
+    "distance": "150m"
+  },
+  {
+    "id": "safe-6",
+    "name": "GoodLife Fitness",
+    "type": "gym",
+    "lat": 43.6552,
+    "lng": -79.3812,
+    "open24h": true,
+    "distance": "380m"
+  }
+]

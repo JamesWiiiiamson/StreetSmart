@@ -1,0 +1,37 @@
+[
+  {
+    "id": "light-1",
+    "lat": 43.6532,
+    "lng": -79.3832,
+    "level": "low",
+    "type": "street"
+  },
+  {
+    "id": "light-2",
+    "lat": 43.6562,
+    "lng": -79.3902,
+    "level": "medium",
+    "type": "street"
+  },
+  {
+    "id": "light-3",
+    "lat": 43.6502,
+    "lng": -79.3762,
+    "level": "low",
+    "type": "alley"
+  },
+  {
+    "id": "light-4",
+    "lat": 43.6582,
+    "lng": -79.3882,
+    "level": "high",
+    "type": "commercial"
+  },
+  {
+    "id": "light-5",
+    "lat": 43.6492,
+    "lng": -79.3852,
+    "level": "medium",
+    "type": "residential"
+  }
+]

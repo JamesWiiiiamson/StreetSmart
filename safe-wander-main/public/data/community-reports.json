@@ -1,0 +1,46 @@
+[
+  {
+    "id": "report-1",
+    "lat": 43.6542,
+    "lng": -79.3822,
+    "type": "bad_lighting",
+    "description": "Street lights not working on this block",
+    "timestamp": 1732234800000,
+    "upvotes": 8,
+    "downvotes": 1,
+    "reportedBy": "user123"
+  },
+  {
+    "id": "report-2",
+    "lat": 43.6572,
+    "lng": -79.3892,
+    "type": "no_sidewalk",
+    "description": "Broken sidewalk, unsafe for walking",
+    "timestamp": 1732231200000,
+    "upvotes": 5,
+    "downvotes": 0,
+    "reportedBy": "user456"
+  },
+  {
+    "id": "report-3",
+    "lat": 43.6512,
+    "lng": -79.3772,
+    "type": "suspicious_area",
+    "description": "Area feels unsafe at night",
+    "timestamp": 1732227600000,
+    "upvotes": 12,
+    "downvotes": 3,
+    "reportedBy": "user789"
+  },
+  {
+    "id": "report-4",
+    "lat": 43.6592,
+    "lng": -79.3872,
+    "type": "blocked_path",
+    "description": "Construction blocking sidewalk",
+    "timestamp": 1732220400000,
+    "upvotes": 6,
+    "downvotes": 0,
+    "reportedBy": "user321"
+  }
+]

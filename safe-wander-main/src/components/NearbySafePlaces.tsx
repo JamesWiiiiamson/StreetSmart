@@ -1,0 +1,106 @@
+import { MapPin, Clock, Navigation, Fuel, Coffee, ShoppingCart, Train, Dumbbell, Cross } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+
+interface SafePlace {
+  id: string;
+  name: string;
+  type: string;
+  lat: number;
+  lng: number;
+  open24h: boolean;
+  hoursUntilClose?: number;
+  distance: string;
+}
+
+interface NearbySafePlacesProps {
+  places: SafePlace[];
+  onPlaceSelect: (place: SafePlace) => void;
+}
+
+const NearbySafePlaces = ({ places, onPlaceSelect }: NearbySafePlacesProps) => {
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'pharmacy':
+        return <Cross className="h-5 w-5 text-accent" />;
+      case 'gas_station':
+        return <Fuel className="h-5 w-5 text-accent" />;
+      case 'restaurant':
+        return <Coffee className="h-5 w-5 text-accent" />;
+      case 'grocery':
+        return <ShoppingCart className="h-5 w-5 text-accent" />;
+      case 'subway':
+        return <Train className="h-5 w-5 text-accent" />;
+      case 'gym':
+        return <Dumbbell className="h-5 w-5 text-accent" />;
+      default:
+        return <MapPin className="h-5 w-5 text-accent" />;
+    }
+  };
+
+  return (
+    <Card className="p-4 bg-card border-border h-full flex flex-col">
+      <div className="flex items-center gap-2 mb-4">
+        <MapPin className="h-5 w-5 text-primary" />
+        <h3 className="font-semibold text-foreground">Nearby Safe Places</h3>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="space-y-3">
+          {places.map((place) => (
+            <Card
+              key={place.id}
+              className="p-3 bg-secondary border-border hover:border-primary transition-colors cursor-pointer"
+              onClick={() => onPlaceSelect(place)}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-1">{getIcon(place.type)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h4 className="font-medium text-sm text-foreground truncate">
+                      {place.name}
+                    </h4>
+                    {place.open24h ? (
+                      <Badge variant="outline" className="bg-success/10 text-success border-success/20 shrink-0">
+                        24/7
+                      </Badge>
+                    ) : place.hoursUntilClose ? (
+                      <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 shrink-0">
+                        {place.hoursUntilClose}h
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground capitalize mb-2">
+                    {place.type.replace('_', ' ')}
+                  </p>
+                  <div className="flex items-center gap-4 text-xs">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Navigation className="h-3 w-3" />
+                      <span>{place.distance}</span>
+                    </div>
+                    {!place.open24h && place.hoursUntilClose && (
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>Closes in {place.hoursUntilClose}h</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </ScrollArea>
+
+      <div className="mt-4 pt-4 border-t border-border">
+        <p className="text-xs text-muted-foreground text-center">
+          Click on any location to get directions
+        </p>
+      </div>
+    </Card>
+  );
+};
+
+export default NearbySafePlaces;

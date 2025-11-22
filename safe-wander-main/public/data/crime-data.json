@@ -1,0 +1,47 @@
+[
+  {
+    "id": "crime-1",
+    "type": "assault",
+    "lat": 43.6532,
+    "lng": -79.3832,
+    "severity": "high",
+    "timestamp": "2025-11-20T22:30:00Z",
+    "description": "Assault reported"
+  },
+  {
+    "id": "crime-2",
+    "type": "theft",
+    "lat": 43.6562,
+    "lng": -79.3902,
+    "severity": "medium",
+    "timestamp": "2025-11-21T01:15:00Z",
+    "description": "Vehicle break-in"
+  },
+  {
+    "id": "crime-3",
+    "type": "vandalism",
+    "lat": 43.6502,
+    "lng": -79.3762,
+    "severity": "low",
+    "timestamp": "2025-11-19T23:45:00Z",
+    "description": "Property vandalism"
+  },
+  {
+    "id": "crime-4",
+    "type": "theft",
+    "lat": 43.6582,
+    "lng": -79.3882,
+    "severity": "medium",
+    "timestamp": "2025-11-21T18:20:00Z",
+    "description": "Shoplifting incident"
+  },
+  {
+    "id": "crime-5",
+    "type": "assault",
+    "lat": 43.6492,
+    "lng": -79.3852,
+    "severity": "high",
+    "timestamp": "2025-11-20T03:10:00Z",
+    "description": "Assault near transit station"
+  }
+]
