@@ -345,6 +345,9 @@ const Index = () => {
           <div className="lg:hidden absolute top-4 left-4 right-4 z-30 space-y-2">
             <SafetyLayers activeLayers={activeLayers} onLayerToggle={handleLayerToggle} />
           </div>
+
+          {/* Report Button - positioned on map */}
+          <ReportButton onClick={() => setIsReportModalOpen(true)} />
         </div>
 
         {/* Right Sidebar */}
@@ -356,9 +359,6 @@ const Index = () => {
             onDismiss={handleDismissReport}
           />
         </aside>
-
-        {/* Report Button */}
-        <ReportButton onClick={() => setIsReportModalOpen(true)} />
 
         {/* Report Modal */}
         <ReportModal
