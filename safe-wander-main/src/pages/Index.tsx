@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { CommunityReport, generateReportId } from '@/lib/reportUtils';
 import { testBackend } from "../lib/api.js";
 import { fetchNearbyPlaces, SafePlace } from '@/lib/placesUtils';
+import { RouteComparison } from '@/lib/heatmapUtils';
 
 
 const Index = () => {
@@ -33,6 +34,8 @@ const Index = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [routeOrigin, setRouteOrigin] = useState<{ lat: number; lng: number; address: string } | null>(null);
   const [routeDestination, setRouteDestination] = useState<{ lat: number; lng: number; address: string } | null>(null);
+  const [routeComparison, setRouteComparison] = useState<RouteComparison | null>(null);
+  const [selectedRouteType, setSelectedRouteType] = useState<'shortest' | 'safest' | 'balanced' | null>(null);
 
   console.log("communityReports", communityReports)
 
@@ -156,6 +159,24 @@ const Index = () => {
     setMapInstance(map);
   };
 
+  const handleRoutesCalculated = (comparison: RouteComparison) => {
+    setRouteComparison(comparison);
+    // Default to balanced route if available, but only if no route is currently selected
+    if (!selectedRouteType) {
+      if (comparison.balanced && comparison.balanced.route) {
+        setSelectedRouteType('balanced');
+      } else if (comparison.shortest && comparison.shortest.route) {
+        setSelectedRouteType('shortest');
+      } else if (comparison.safest && comparison.safest.route) {
+        setSelectedRouteType('safest');
+      }
+    }
+  };
+
+  const handleRouteTypeSelect = (type: 'shortest' | 'safest' | 'balanced') => {
+    setSelectedRouteType(type);
+  };
+
   const handleRouteRequest = useCallback((
     origin: { 
       placeId: string; 
@@ -267,7 +288,13 @@ const Index = () => {
         {/* Left Sidebar */}
         <aside className="w-80 bg-card border-r border-border overflow-y-auto p-4 space-y-4 hidden lg:block">
           <SafetyLayers activeLayers={activeLayers} onLayerToggle={handleLayerToggle} />
-          <RouteOptions onRouteRequest={handleRouteRequest} map={mapInstance} />
+          <RouteOptions 
+            onRouteRequest={handleRouteRequest} 
+            map={mapInstance}
+            routeComparison={routeComparison}
+            selectedRouteType={selectedRouteType}
+            onRouteTypeSelect={handleRouteTypeSelect}
+          />
         </aside>
 
         {/* Map */}
@@ -284,6 +311,8 @@ const Index = () => {
             userLocation={userLocation}
             isReportMode={!!pendingReport}
             pendingReportType={pendingReport?.type || null}
+            onRoutesCalculated={handleRoutesCalculated}
+            selectedRouteType={selectedRouteType}
           />
 
           {/* Mobile Controls */}

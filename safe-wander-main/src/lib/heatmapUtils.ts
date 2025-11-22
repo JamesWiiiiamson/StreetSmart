@@ -349,3 +349,157 @@ export const getLightingScoreAtLocation = (
   return cell?.lightingScore ?? 50; // Default to medium lighting if not found
 };
 
+/**
+ * Route scoring interface
+ */
+export interface RouteScore {
+  route: google.maps.DirectionsRoute;
+  distance: number; // in meters
+  duration: number; // in seconds
+  crimeSafetyScore: number; // 0-100, higher is safer
+  lightingScore: number; // 0-100, higher is better lit
+  combinedSafetyScore: number; // 0-100, weighted combination
+  minSafetyScore: number; // worst point along route
+}
+
+/**
+ * Score a route using both crime and lighting heatmaps
+ * Returns a comprehensive safety score
+ */
+export const scoreRoute = (
+  route: google.maps.DirectionsRoute,
+  crimeHeatmap: HeatmapData | null,
+  lightingHeatmap: LightingHeatmapData | null
+): RouteScore => {
+  // Extract path from route - handle both overview_path and step paths
+  const path: google.maps.LatLng[] = [];
+  
+  // Try to use overview_path first (faster, less detailed)
+  if (route.overview_path && route.overview_path.length > 0) {
+    route.overview_path.forEach((point) => {
+      path.push(point);
+    });
+  } else if (route.legs && route.legs.length > 0) {
+    // Fallback to step-by-step path
+    route.legs.forEach((leg) => {
+      if (leg.steps) {
+        leg.steps.forEach((step) => {
+          if (step.path) {
+            step.path.forEach((point) => {
+              path.push(point);
+            });
+          }
+        });
+      }
+    });
+  }
+
+  // Calculate distance and duration
+  let totalDistance = 0;
+  let totalDuration = 0;
+  route.legs.forEach((leg) => {
+    totalDistance += leg.distance?.value || 0;
+    totalDuration += leg.duration?.value || 0;
+  });
+
+  // Score based on crime heatmap
+  let crimeSafetyScore = 50; // Default if no data
+  let minCrimeScore = 50;
+  if (crimeHeatmap && path.length > 0) {
+    const crimeScores = path.map((point) =>
+      getSafetyScoreAtLocation(point.lat(), point.lng(), crimeHeatmap)
+    );
+    crimeSafetyScore = crimeScores.reduce((sum, score) => sum + score, 0) / crimeScores.length;
+    minCrimeScore = Math.min(...crimeScores);
+  }
+
+  // Score based on lighting heatmap
+  let lightingScore = 50; // Default if no data
+  if (lightingHeatmap && path.length > 0) {
+    const lightingScores = path.map((point) =>
+      getLightingScoreAtLocation(point.lat(), point.lng(), lightingHeatmap)
+    );
+    lightingScore = lightingScores.reduce((sum, score) => sum + score, 0) / lightingScores.length;
+  }
+
+  // Combined safety score: 60% crime safety, 40% lighting
+  // Both are 0-100, so weighted average
+  const combinedSafetyScore = crimeHeatmap && lightingHeatmap
+    ? crimeSafetyScore * 0.6 + lightingScore * 0.4
+    : crimeHeatmap
+    ? crimeSafetyScore
+    : lightingHeatmap
+    ? lightingScore
+    : 50;
+
+  return {
+    route,
+    distance: totalDistance,
+    duration: totalDuration,
+    crimeSafetyScore,
+    lightingScore,
+    combinedSafetyScore,
+    minSafetyScore: minCrimeScore,
+  };
+};
+
+/**
+ * Compare multiple routes and identify shortest, safest, and balanced
+ */
+export interface RouteComparison {
+  routes: RouteScore[];
+  shortest: RouteScore | null;
+  safest: RouteScore | null;
+  balanced: RouteScore | null;
+}
+
+export const compareRoutes = (
+  routes: google.maps.DirectionsRoute[],
+  crimeHeatmap: HeatmapData | null,
+  lightingHeatmap: LightingHeatmapData | null
+): RouteComparison => {
+  if (routes.length === 0) {
+    return { routes: [], shortest: null, safest: null, balanced: null };
+  }
+
+  // Score all routes
+  const scoredRoutes = routes.map((route) => scoreRoute(route, crimeHeatmap, lightingHeatmap));
+
+  // Find shortest route (by distance)
+  const shortest = scoredRoutes.reduce((prev, curr) =>
+    curr.distance < prev.distance ? curr : prev
+  );
+
+  // Find safest route (by combined safety score)
+  const safest = scoredRoutes.reduce((prev, curr) =>
+    curr.combinedSafetyScore > prev.combinedSafetyScore ? curr : prev
+  );
+
+  // Find balanced route (best trade-off between distance and safety)
+  // Use a normalized score: (safety_score / 100) * 0.6 + (1 - normalized_distance) * 0.4
+  // Normalize distance: 0 (longest) to 1 (shortest)
+  const maxDistance = Math.max(...scoredRoutes.map((r) => r.distance));
+  const minDistance = Math.min(...scoredRoutes.map((r) => r.distance));
+  const balanced = scoredRoutes.reduce((prev, curr) => {
+    // Normalize distance: 0 (longest) to 1 (shortest)
+    const prevDistanceNorm = maxDistance > minDistance 
+      ? 1 - (prev.distance - minDistance) / (maxDistance - minDistance)
+      : 1;
+    const currDistanceNorm = maxDistance > minDistance
+      ? 1 - (curr.distance - minDistance) / (maxDistance - minDistance)
+      : 1;
+    
+    // Combined score: higher is better
+    const prevScore = (prev.combinedSafetyScore / 100) * 0.6 + prevDistanceNorm * 0.4;
+    const currScore = (curr.combinedSafetyScore / 100) * 0.6 + currDistanceNorm * 0.4;
+    return currScore > prevScore ? curr : prev;
+  });
+
+  return {
+    routes: scoredRoutes,
+    shortest,
+    safest,
+    balanced,
+  };
+};
+

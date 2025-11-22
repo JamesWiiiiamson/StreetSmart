@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { processCrimeDataToGrid, HeatmapData, findSafeWaypoints, getRouteSafetyScore, processLightingDataToGrid, LightingHeatmapData } from '@/lib/heatmapUtils';
+import { processCrimeDataToGrid, HeatmapData, findSafeWaypoints, getRouteSafetyScore, processLightingDataToGrid, LightingHeatmapData, compareRoutes, RouteComparison, scoreRoute } from '@/lib/heatmapUtils';
 
 // Helper function to get marker icon (custom image or default symbol)
 const getMarkerIcon = (type: 'image' | 'symbol', imagePath?: string, symbolConfig?: google.maps.Symbol) => {
@@ -31,13 +31,16 @@ interface MapProps {
   userLocation?: { lat: number; lng: number } | null;
   isReportMode?: boolean;
   pendingReportType?: string | null;
+  onRoutesCalculated?: (comparison: RouteComparison) => void;
+  selectedRouteType?: 'shortest' | 'safest' | 'balanced' | null;
 }
 
-const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick, routeOrigin, routeDestination, userLocation, isReportMode = false, pendingReportType = null }: MapProps) => {
+const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick, routeOrigin, routeDestination, userLocation, isReportMode = false, pendingReportType = null, onRoutesCalculated, selectedRouteType = null }: MapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const routePolylinesRef = useRef<google.maps.Polyline[]>([]);
   const userLocationMarkerRef = useRef<google.maps.Marker | null>(null);
   const tempMarkerRef = useRef<google.maps.Marker | null>(null);
   const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
@@ -49,6 +52,9 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
   const [isLoading, setIsLoading] = useState(true);
   const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
   const [lightingHeatmapData, setLightingHeatmapData] = useState<LightingHeatmapData | null>(null);
+  const lastRouteKeyRef = useRef<string | null>(null);
+  const lastDirectionsResultRef = useRef<google.maps.DirectionsResult | null>(null);
+  const routeComparisonRef = useRef<RouteComparison | null>(null);
 
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -179,6 +185,8 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
       if (directionsRendererRef.current) {
         directionsRendererRef.current.setMap(null);
       }
+      routePolylinesRef.current.forEach(polyline => polyline.setMap(null));
+      routePolylinesRef.current = [];
       if (userLocationMarkerRef.current) {
         userLocationMarkerRef.current.setMap(null);
       }
@@ -468,7 +476,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
     }
   }, [activeLayers.lightingHeatmap, lightingHeatmapData]);
 
-  // Handle route calculation and rendering with safe waypoints
+  // Handle route calculation and rendering with multiple alternatives
   useEffect(() => {
     if (!mapInstanceRef.current || !routeDestination) return;
     
@@ -478,68 +486,311 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
     
     if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) return;
 
+    // Create a unique key for this route request
+    const baseRouteKey = `${origin.lat},${origin.lng}-${routeDestination.lat},${routeDestination.lng}`;
+    const routeKey = `${baseRouteKey}-${selectedRouteType || 'default'}`;
+    
+    // If we have cached routes and only the selection changed, update display
+    const lastBaseKey = lastRouteKeyRef.current?.split('-').slice(0, 2).join('-');
+    if (lastBaseKey === baseRouteKey && routeComparisonRef.current && lastRouteKeyRef.current !== routeKey) {
+      // Only selection changed - update display with cached data
+      const comparison = routeComparisonRef.current;
+      const routeToDisplay = selectedRouteType && comparison[selectedRouteType]
+        ? comparison[selectedRouteType]
+        : comparison.balanced || comparison.shortest || (comparison.routes.length > 0 ? comparison.routes[0] : null);
+
+      if (routeToDisplay && routeToDisplay.route && mapInstanceRef.current && lastDirectionsResultRef.current) {
+        // Clear existing polylines
+        routePolylinesRef.current.forEach((polyline) => {
+          polyline.setMap(null);
+        });
+        routePolylinesRef.current = [];
+        if (directionsRendererRef.current) {
+          directionsRendererRef.current.setMap(null);
+        }
+
+        // Use the cached directions result
+        const originalResult = lastDirectionsResultRef.current;
+        const selectedResult: google.maps.DirectionsResult = {
+          ...originalResult,
+          routes: [routeToDisplay.route],
+        };
+
+        // Set color based on selected route type
+        let routeColor = '#3b82f6'; // Default blue
+        if (selectedRouteType === 'shortest') routeColor = '#3b82f6'; // Blue
+        else if (selectedRouteType === 'safest') routeColor = '#10b981'; // Green
+        else if (selectedRouteType === 'balanced') routeColor = '#f97316'; // Orange
+        // Fallback to route comparison if selectedRouteType is null
+        else if (routeToDisplay === comparison.shortest) routeColor = '#3b82f6'; // Blue
+        else if (routeToDisplay === comparison.safest) routeColor = '#10b981'; // Green
+        else if (routeToDisplay === comparison.balanced) routeColor = '#f97316'; // Orange
+
+        // Create renderer for markers only
+        directionsRendererRef.current = new google.maps.DirectionsRenderer({
+          map: mapInstanceRef.current!,
+          suppressMarkers: false,
+          polylineOptions: {
+            strokeOpacity: 0, // Hide default polyline
+          },
+        });
+        directionsRendererRef.current.setDirections(selectedResult);
+        
+        // Create colored polyline for selected route
+        const selectedPath: google.maps.LatLng[] = [];
+        routeToDisplay.route.legs.forEach((leg) => {
+          leg.steps.forEach((step) => {
+            step.path.forEach((point) => {
+              selectedPath.push(point);
+            });
+          });
+        });
+        
+        const selectedPolyline = new google.maps.Polyline({
+          path: selectedPath,
+          strokeColor: routeColor,
+          strokeWeight: 12,
+          strokeOpacity: 1.0,
+          zIndex: 1000,
+          map: mapInstanceRef.current!,
+        });
+        routePolylinesRef.current.push(selectedPolyline);
+
+        // Display other routes
+        originalResult.routes.forEach((route) => {
+          if (route === routeToDisplay.route) return;
+
+          const altRouteScore = comparison.routes.find(r => r.route === route);
+          let altColor = '#94a3b8'; // Neutral gray
+          if (altRouteScore) {
+            if (altRouteScore === comparison.shortest) altColor = '#60a5fa'; // Light blue
+            else if (altRouteScore === comparison.safest) altColor = '#34d399'; // Light green
+            else if (altRouteScore === comparison.balanced) altColor = '#fb923c'; // Light orange
+          }
+
+          const altPath: google.maps.LatLng[] = [];
+          route.legs.forEach((leg) => {
+            leg.steps.forEach((step) => {
+              step.path.forEach((point) => {
+                altPath.push(point);
+              });
+            });
+          });
+          
+          const altPolyline = new google.maps.Polyline({
+            path: altPath,
+            strokeColor: altColor,
+            strokeWeight: 6,
+            strokeOpacity: 0.6,
+            zIndex: 500,
+            map: mapInstanceRef.current!,
+          });
+          routePolylinesRef.current.push(altPolyline);
+        });
+
+        // Fit map to show entire route
+        const bounds = new google.maps.LatLngBounds();
+        routeToDisplay.route.legs.forEach((leg) => {
+          bounds.extend(leg.start_location);
+          bounds.extend(leg.end_location);
+        });
+        mapInstanceRef.current?.fitBounds(bounds);
+
+        lastRouteKeyRef.current = routeKey;
+        return;
+      }
+    }
+    
+    // Skip if we've already calculated this exact route
+    if (lastRouteKeyRef.current === routeKey) return;
+    
+    lastRouteKeyRef.current = routeKey;
+
     const directionsService = new google.maps.DirectionsService();
-    const directionsRenderer = directionsRendererRef.current;
-
-    if (!directionsRenderer) return;
-
-    // If heatmap is active and data is loaded, use safe waypoints
-    const useSafeRoute = activeLayers.heatmap && heatmapDataRef.current && heatmapDataRef.current.cells.length > 0;
+    
+    // Clear existing polylines
+    routePolylinesRef.current.forEach((polyline) => {
+      polyline.setMap(null);
+    });
+    routePolylinesRef.current = [];
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setMap(null);
+    }
 
     const routeRequest: google.maps.DirectionsRequest = {
       origin: new google.maps.LatLng(origin.lat, origin.lng),
       destination: new google.maps.LatLng(routeDestination.lat, routeDestination.lng),
       travelMode: google.maps.TravelMode.WALKING,
+      provideRouteAlternatives: true, // Request multiple route alternatives
     };
 
-    if (useSafeRoute && heatmapDataRef.current) {
-      // Find safe waypoints
-      const waypoints = findSafeWaypoints(
-        origin,
-        routeDestination,
-        heatmapDataRef.current,
-        3
-      );
-
-      if (waypoints.length > 0) {
-        routeRequest.waypoints = waypoints.map((wp) => ({
-          location: wp,
-          stopover: false,
-        }));
-        routeRequest.optimizeWaypoints = false;
-      }
-    }
-
     directionsService.route(routeRequest, (result, status) => {
-      if (status === 'OK' && result) {
-        directionsRenderer.setDirections(result);
+      if (status === 'OK' && result && result.routes && result.routes.length > 0) {
+        // Store the original result
+        lastDirectionsResultRef.current = result;
         
-        // Calculate and display safety score if heatmap is active
-        if (useSafeRoute && heatmapDataRef.current && result.routes[0]) {
-          const path: google.maps.LatLng[] = [];
-          result.routes[0].overview_path.forEach((point) => {
-            path.push(point);
-          });
-          
-          const safety = getRouteSafetyScore(path, heatmapDataRef.current);
-          toast.success(
-            `Safe route calculated! Average safety: ${Math.round(safety.averageScore)}/100`
+        try {
+          // Score and compare routes
+          const comparison = compareRoutes(
+            result.routes,
+            heatmapDataRef.current,
+            lightingHeatmapDataRef.current
           );
+          routeComparisonRef.current = comparison;
+
+          // Pass comparison to parent
+          if (onRoutesCalculated) {
+            onRoutesCalculated(comparison);
+          }
+
+          // If only one route, use it directly
+          if (result.routes.length === 1) {
+            const singleRoute = result.routes[0];
+            const singleRouteScore = comparison.routes[0];
+            
+            // Create renderer for markers
+            directionsRendererRef.current = new google.maps.DirectionsRenderer({
+              map: mapInstanceRef.current!,
+              suppressMarkers: false,
+              polylineOptions: {
+                strokeOpacity: 0,
+              },
+            });
+            
+            const singleResult: google.maps.DirectionsResult = {
+              ...result,
+              routes: [singleRoute],
+            };
+            directionsRendererRef.current.setDirections(singleResult);
+            
+            // Create colored polyline
+            const singlePath: google.maps.LatLng[] = [];
+            singleRoute.legs.forEach((leg) => {
+              leg.steps.forEach((step) => {
+                step.path.forEach((point) => {
+                  singlePath.push(point);
+                });
+              });
+            });
+            
+            const singlePolyline = new google.maps.Polyline({
+              path: singlePath,
+              strokeColor: '#3b82f6',
+              strokeWeight: 12,
+              strokeOpacity: 1.0,
+              zIndex: 1000,
+              map: mapInstanceRef.current!,
+            });
+            routePolylinesRef.current.push(singlePolyline);
+
+            // Fit map
+            const bounds = new google.maps.LatLngBounds();
+            singleRoute.legs.forEach((leg) => {
+              bounds.extend(leg.start_location);
+              bounds.extend(leg.end_location);
+            });
+            mapInstanceRef.current?.fitBounds(bounds);
+          } else {
+            // Multiple routes - display based on selection
+            const routeToDisplay = selectedRouteType && comparison[selectedRouteType]
+              ? comparison[selectedRouteType]
+              : comparison.balanced || comparison.shortest || (comparison.routes.length > 0 ? comparison.routes[0] : null);
+
+            if (routeToDisplay && routeToDisplay.route) {
+              const selectedResult: google.maps.DirectionsResult = {
+                ...result,
+                routes: [routeToDisplay.route],
+              };
+
+              // Set color based on selected route type
+              let routeColor = '#3b82f6'; // Default blue
+              if (selectedRouteType === 'shortest') routeColor = '#3b82f6'; // Blue
+              else if (selectedRouteType === 'safest') routeColor = '#10b981'; // Green
+              else if (selectedRouteType === 'balanced') routeColor = '#f97316'; // Orange
+              // Fallback to route comparison if selectedRouteType is null
+              else if (routeToDisplay === comparison.shortest) routeColor = '#3b82f6'; // Blue
+              else if (routeToDisplay === comparison.safest) routeColor = '#10b981'; // Green
+              else if (routeToDisplay === comparison.balanced) routeColor = '#f97316'; // Orange
+
+              // Create renderer for markers
+              directionsRendererRef.current = new google.maps.DirectionsRenderer({
+                map: mapInstanceRef.current!,
+                suppressMarkers: false,
+                polylineOptions: {
+                  strokeOpacity: 0,
+                },
+              });
+              directionsRendererRef.current.setDirections(selectedResult);
+              
+              // Create colored polyline for selected route
+              const selectedPath: google.maps.LatLng[] = [];
+              routeToDisplay.route.legs.forEach((leg) => {
+                leg.steps.forEach((step) => {
+                  step.path.forEach((point) => {
+                    selectedPath.push(point);
+                  });
+                });
+              });
+              
+              const selectedPolyline = new google.maps.Polyline({
+                path: selectedPath,
+                strokeColor: routeColor,
+                strokeWeight: 12,
+                strokeOpacity: 1.0,
+                zIndex: 1000,
+                map: mapInstanceRef.current!,
+              });
+              routePolylinesRef.current.push(selectedPolyline);
+
+              // Display other routes
+              result.routes.forEach((route) => {
+                if (route === routeToDisplay.route) return;
+
+                const altRouteScore = comparison.routes.find(r => r.route === route);
+                let altColor = '#94a3b8'; // Neutral gray
+                if (altRouteScore) {
+                  if (altRouteScore === comparison.shortest) altColor = '#60a5fa'; // Light blue
+                  else if (altRouteScore === comparison.safest) altColor = '#34d399'; // Light green
+                  else if (altRouteScore === comparison.balanced) altColor = '#fb923c'; // Light orange
+                }
+
+                const altPath: google.maps.LatLng[] = [];
+                route.legs.forEach((leg) => {
+                  leg.steps.forEach((step) => {
+                    step.path.forEach((point) => {
+                      altPath.push(point);
+                    });
+                  });
+                });
+                
+                const altPolyline = new google.maps.Polyline({
+                  path: altPath,
+                  strokeColor: altColor,
+                  strokeWeight: 6,
+                  strokeOpacity: 0.6,
+                  zIndex: 500,
+                  map: mapInstanceRef.current!,
+                });
+                routePolylinesRef.current.push(altPolyline);
+              });
+
+              // Fit map
+              const bounds = new google.maps.LatLngBounds();
+              routeToDisplay.route.legs.forEach((leg) => {
+                bounds.extend(leg.start_location);
+                bounds.extend(leg.end_location);
+              });
+              mapInstanceRef.current?.fitBounds(bounds);
+            }
+          }
+        } catch (error) {
+          console.error('Error processing routes:', error);
         }
-        
-        // Fit map to show entire route
-        const bounds = new google.maps.LatLngBounds();
-        result.routes[0].legs.forEach((leg) => {
-          bounds.extend(leg.start_location);
-          bounds.extend(leg.end_location);
-        });
-        mapInstanceRef.current?.fitBounds(bounds);
       } else {
         console.error('Directions request failed due to ' + status);
-        toast.error('Failed to calculate route');
       }
     });
-  }, [routeOrigin, routeDestination, userLocation, activeLayers.heatmap, heatmapData]);
+  }, [routeOrigin, routeDestination, userLocation, selectedRouteType, onRoutesCalculated]);
 
   // Update markers based on active layers
   useEffect(() => {
