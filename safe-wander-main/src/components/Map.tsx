@@ -13,12 +13,16 @@ interface MapProps {
     userReports: boolean;
   };
   onMapClick?: (lat: number, lng: number) => void;
+  routeDestination?: { lat: number; lng: number; address: string } | null;
+  userLocation?: { lat: number; lng: number } | null;
 }
 
-const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick }: MapProps) => {
+const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick, routeDestination, userLocation }: MapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const userLocationMarkerRef = useRef<google.maps.Marker | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -39,7 +43,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
         }
 
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry,directions`;
         script.async = true;
         script.defer = true;
         script.onload = () => resolve();
@@ -108,7 +112,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
       });
 
       // Add user location marker
-      new google.maps.Marker({
+      const userMarker = new google.maps.Marker({
         position: { lat, lng },
         map,
         icon: {
@@ -121,6 +125,19 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
         },
         title: 'Your Location',
       });
+      userLocationMarkerRef.current = userMarker;
+
+      // Initialize DirectionsRenderer
+      const directionsRenderer = new google.maps.DirectionsRenderer({
+        map,
+        suppressMarkers: false,
+        polylineOptions: {
+          strokeColor: '#0ea5e9',
+          strokeWeight: 5,
+          strokeOpacity: 0.8,
+        },
+      });
+      directionsRendererRef.current = directionsRenderer;
 
       mapInstanceRef.current = map;
       setIsLoading(false);
@@ -143,8 +160,47 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
       // Cleanup markers
       markersRef.current.forEach(marker => marker.setMap(null));
       markersRef.current = [];
+      if (directionsRendererRef.current) {
+        directionsRendererRef.current.setMap(null);
+      }
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.setMap(null);
+      }
     };
   }, []);
+
+  // Handle route calculation and rendering
+  useEffect(() => {
+    if (!mapInstanceRef.current || !routeDestination || !userLocation) return;
+    if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) return;
+
+    const directionsService = new google.maps.DirectionsService();
+    const directionsRenderer = directionsRendererRef.current;
+
+    if (!directionsRenderer) return;
+
+    directionsService.route(
+      {
+        origin: new google.maps.LatLng(userLocation.lat, userLocation.lng),
+        destination: new google.maps.LatLng(routeDestination.lat, routeDestination.lng),
+        travelMode: google.maps.TravelMode.WALKING,
+      },
+      (result, status) => {
+        if (status === 'OK' && result) {
+          directionsRenderer.setDirections(result);
+          // Fit map to show entire route
+          const bounds = new google.maps.LatLngBounds();
+          result.routes[0].legs.forEach((leg) => {
+            bounds.extend(leg.start_location);
+            bounds.extend(leg.end_location);
+          });
+          mapInstanceRef.current?.fitBounds(bounds);
+        } else {
+          console.error('Directions request failed due to ' + status);
+        }
+      }
+    );
+  }, [routeDestination, userLocation]);
 
   // Update markers based on active layers
   useEffect(() => {

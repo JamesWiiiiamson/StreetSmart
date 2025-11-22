@@ -18,9 +18,10 @@ interface SafePlace {
 interface NearbySafePlacesProps {
   places: SafePlace[];
   onPlaceSelect: (place: SafePlace) => void;
+  isLoading?: boolean;
 }
 
-const NearbySafePlaces = ({ places, onPlaceSelect }: NearbySafePlacesProps) => {
+const NearbySafePlaces = ({ places, onPlaceSelect, isLoading = false }: NearbySafePlacesProps) => {
   const getIcon = (type: string) => {
     switch (type) {
       case 'pharmacy':
@@ -48,8 +49,20 @@ const NearbySafePlaces = ({ places, onPlaceSelect }: NearbySafePlacesProps) => {
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="space-y-3">
-          {places.map((place) => (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2 mx-auto"></div>
+              <p className="text-sm text-muted-foreground">Loading nearby places...</p>
+            </div>
+          </div>
+        ) : places.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-sm text-muted-foreground">No nearby places found</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {places.map((place) => (
             <Card
               key={place.id}
               className="p-3 bg-secondary border-border hover:border-primary transition-colors cursor-pointer"
@@ -90,8 +103,9 @@ const NearbySafePlaces = ({ places, onPlaceSelect }: NearbySafePlacesProps) => {
                 </div>
               </div>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </ScrollArea>
 
       <div className="mt-4 pt-4 border-t border-border">
