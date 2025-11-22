@@ -20,6 +20,8 @@ const Index = () => {
     lighting: true,
     businesses: false,
     userReports: true,
+    heatmap: false,
+    lightingHeatmap: false,
   });
 
   const [crimeData, setCrimeData] = useState([]);
@@ -115,7 +117,7 @@ const Index = () => {
     loadNearbyPlaces();
   }, [userLocation, mapInstance, loadNearbyPlaces]);
 
-  const handleLayerToggle = (layer: 'crime' | 'lighting' | 'businesses' | 'userReports') => {
+  const handleLayerToggle = (layer: 'crime' | 'lighting' | 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => {
     setActiveLayers((prev) => ({
       ...prev,
       [layer]: !prev[layer],
@@ -258,6 +260,8 @@ const Index = () => {
             onMapLoad={handleMapLoad}
             routeDestination={routeDestination}
             userLocation={userLocation}
+            isReportMode={!!pendingReport}
+            pendingReportType={pendingReport?.type || null}
           />
 
           {/* Mobile Controls */}

@@ -1,4 +1,4 @@
-import { Layers, AlertTriangle, Lightbulb, Store, Users } from 'lucide-react';
+import { Layers, AlertTriangle, Lightbulb, Store, Users, Map } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -9,8 +9,10 @@ interface SafetyLayersProps {
     lighting: boolean;
     businesses: boolean;
     userReports: boolean;
+    heatmap: boolean;
+    lightingHeatmap: boolean;
   };
-  onLayerToggle: (layer: 'crime' | 'lighting' | 'businesses' | 'userReports') => void;
+  onLayerToggle: (layer: 'crime' | 'lighting' | 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => void;
 }
 
 const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
@@ -77,6 +79,34 @@ const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
             onCheckedChange={() => onLayerToggle('userReports')}
           />
         </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Map className="h-4 w-4 text-primary" />
+            <Label htmlFor="heatmap-layer" className="cursor-pointer">
+              Crime Heatmap
+            </Label>
+          </div>
+          <Switch
+            id="heatmap-layer"
+            checked={activeLayers.heatmap}
+            onCheckedChange={() => onLayerToggle('heatmap')}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lightbulb className="h-4 w-4 text-warning" />
+            <Label htmlFor="lighting-heatmap-layer" className="cursor-pointer">
+              Lighting Heatmap
+            </Label>
+          </div>
+          <Switch
+            id="lighting-heatmap-layer"
+            checked={activeLayers.lightingHeatmap}
+            onCheckedChange={() => onLayerToggle('lightingHeatmap')}
+          />
+        </div>
       </div>
 
       <div className="mt-6 pt-4 border-t border-border">
@@ -95,6 +125,44 @@ const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
             <span className="text-muted-foreground">Safe / Well Lit</span>
           </div>
         </div>
+        {activeLayers.heatmap && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <h4 className="text-sm font-medium mb-3 text-foreground">Crime Heatmap</h4>
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4" style={{ backgroundColor: '#FFFFCC' }}></div>
+                <span className="text-muted-foreground">Safest (0-10%)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4" style={{ backgroundColor: '#FF9933' }}></div>
+                <span className="text-muted-foreground">Medium (60-70%)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4" style={{ backgroundColor: '#CC0000' }}></div>
+                <span className="text-muted-foreground">Most Dangerous (90-100%)</span>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeLayers.lightingHeatmap && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <h4 className="text-sm font-medium mb-3 text-foreground">Lighting Heatmap</h4>
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4" style={{ backgroundColor: '#10b981' }}></div>
+                <span className="text-muted-foreground">Well Lit (90-100%)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4" style={{ backgroundColor: '#0ea5e9' }}></div>
+                <span className="text-muted-foreground">Good (60-70%)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4" style={{ backgroundColor: '#1a1a2e' }}></div>
+                <span className="text-muted-foreground">Poorly Lit (0-10%)</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );

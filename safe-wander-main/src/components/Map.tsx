@@ -1,5 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { processCrimeDataToGrid, HeatmapData, findSafeWaypoints, getRouteSafetyScore, processLightingDataToGrid, LightingHeatmapData } from '@/lib/heatmapUtils';
+
+// Helper function to get marker icon (custom image or default symbol)
+const getMarkerIcon = (type: 'image' | 'symbol', imagePath?: string, symbolConfig?: google.maps.Symbol) => {
+  if (type === 'image' && imagePath) {
+    return {
+      url: imagePath,
+      scaledSize: new google.maps.Size(32, 32),
+      anchor: new google.maps.Point(16, 32), // Anchor at bottom center for pin-style markers
+    };
+  }
+  return symbolConfig;
+};
 
 interface MapProps {
   onMapLoad?: (map: google.maps.Map) => void;
@@ -11,19 +24,32 @@ interface MapProps {
     lighting: boolean;
     businesses: boolean;
     userReports: boolean;
+    heatmap: boolean;
+    lightingHeatmap: boolean;
   };
   onMapClick?: (lat: number, lng: number) => void;
   routeDestination?: { lat: number; lng: number; address: string } | null;
   userLocation?: { lat: number; lng: number } | null;
+  isReportMode?: boolean;
+  pendingReportType?: string | null;
 }
 
-const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick, routeDestination, userLocation }: MapProps) => {
+const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = [], activeLayers, onMapClick, routeDestination, userLocation, isReportMode = false, pendingReportType = null }: MapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
   const userLocationMarkerRef = useRef<google.maps.Marker | null>(null);
+  const tempMarkerRef = useRef<google.maps.Marker | null>(null);
+  const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const heatmapDataRef = useRef<HeatmapData | null>(null);
+  const heatmapRectanglesRef = useRef<google.maps.Rectangle[]>([]);
+  const lightingHeatmapDataRef = useRef<LightingHeatmapData | null>(null);
+  const lightingHeatmapRectanglesRef = useRef<google.maps.Rectangle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
+  const [lightingHeatmapData, setLightingHeatmapData] = useState<LightingHeatmapData | null>(null);
 
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -142,15 +168,6 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
       mapInstanceRef.current = map;
       setIsLoading(false);
       
-      // Add click listener for placing reports
-      if (onMapClick) {
-        map.addListener('click', (e: google.maps.MapMouseEvent) => {
-          if (e.latLng) {
-            onMapClick(e.latLng.lat(), e.latLng.lng());
-          }
-        });
-      }
-      
       if (onMapLoad) {
         onMapLoad(map);
       }
@@ -166,10 +183,293 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
       if (userLocationMarkerRef.current) {
         userLocationMarkerRef.current.setMap(null);
       }
+      if (tempMarkerRef.current) {
+        tempMarkerRef.current.setMap(null);
+      }
+      if (clickListenerRef.current) {
+        google.maps.event.removeListener(clickListenerRef.current);
+      }
+      // Cleanup heatmap rectangles
+      heatmapRectanglesRef.current.forEach(rect => rect.setMap(null));
+      heatmapRectanglesRef.current = [];
+      // Cleanup lighting heatmap rectangles
+      lightingHeatmapRectanglesRef.current.forEach(rect => rect.setMap(null));
+      lightingHeatmapRectanglesRef.current = [];
     };
   }, []);
 
-  // Handle route calculation and rendering
+  // Handle map click listener for report placement
+  useEffect(() => {
+    if (!mapInstanceRef.current || !onMapClick) return;
+
+    // Remove existing listener if any
+    if (clickListenerRef.current) {
+      google.maps.event.removeListener(clickListenerRef.current);
+    }
+
+    // Add click listener
+    const listener = mapInstanceRef.current.addListener('click', (e: google.maps.MapMouseEvent) => {
+      if (e.latLng && mapInstanceRef.current) {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+
+        // Show temporary marker if in report mode
+        if (isReportMode) {
+          // Remove previous temp marker
+          if (tempMarkerRef.current) {
+            tempMarkerRef.current.setMap(null);
+          }
+
+          // Get color based on report type
+          const getReportColor = (type: string | null) => {
+            switch (type) {
+              case 'bad_lighting': return '#fbbf24';
+              case 'no_sidewalk': return '#f97316';
+              case 'suspicious_area': return '#ef4444';
+              case 'blocked_path': return '#dc2626';
+              default: return '#0ea5e9';
+            }
+          };
+
+          // Create temporary marker
+          const tempMarker = new google.maps.Marker({
+            position: { lat, lng },
+            map: mapInstanceRef.current,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 12,
+              fillColor: getReportColor(pendingReportType),
+              fillOpacity: 0.8,
+              strokeColor: '#ffffff',
+              strokeWeight: 3,
+            },
+            title: 'Click to place report here',
+            animation: google.maps.Animation.DROP,
+          });
+
+          tempMarkerRef.current = tempMarker;
+
+          // Close previous info window if any
+          if (infoWindowRef.current) {
+            infoWindowRef.current.close();
+          }
+
+          // Show info window with confirmation
+          const infoWindow = new google.maps.InfoWindow({
+            content: `<div style="color: #000; padding: 12px; text-align: center; min-width: 150px;">
+              <strong style="display: block; margin-bottom: 8px;">Place Report Here?</strong>
+              <button id="confirm-report" style="
+                background: #0ea5e9;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: 600;
+                margin-right: 8px;
+              ">Confirm</button>
+              <button id="cancel-report" style="
+                background: #6b7280;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: 600;
+              ">Cancel</button>
+            </div>`,
+          });
+
+          infoWindowRef.current = infoWindow;
+          infoWindow.open(mapInstanceRef.current, tempMarker);
+
+          // Handle confirm button click
+          setTimeout(() => {
+            const confirmBtn = document.getElementById('confirm-report');
+            const cancelBtn = document.getElementById('cancel-report');
+            
+            if (confirmBtn) {
+              confirmBtn.onclick = () => {
+                onMapClick(lat, lng);
+                infoWindow.close();
+                infoWindowRef.current = null;
+                if (tempMarkerRef.current) {
+                  tempMarkerRef.current.setMap(null);
+                  tempMarkerRef.current = null;
+                }
+              };
+            }
+            
+            if (cancelBtn) {
+              cancelBtn.onclick = () => {
+                infoWindow.close();
+                infoWindowRef.current = null;
+                if (tempMarkerRef.current) {
+                  tempMarkerRef.current.setMap(null);
+                  tempMarkerRef.current = null;
+                }
+              };
+            }
+          }, 100);
+        } else {
+          // If not in report mode, just call the handler directly
+          onMapClick(lat, lng);
+        }
+      }
+    });
+
+    clickListenerRef.current = listener;
+
+    return () => {
+      if (clickListenerRef.current) {
+        google.maps.event.removeListener(clickListenerRef.current);
+        clickListenerRef.current = null;
+      }
+    };
+  }, [onMapClick, isReportMode, pendingReportType]);
+
+  // Update cursor style when in report mode and cleanup temp marker
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    const mapDiv = mapRef.current;
+    if (mapDiv) {
+      if (isReportMode) {
+        mapDiv.style.cursor = 'crosshair';
+      } else {
+        mapDiv.style.cursor = '';
+        // Clear temporary marker and info window when exiting report mode
+        if (tempMarkerRef.current) {
+          tempMarkerRef.current.setMap(null);
+          tempMarkerRef.current = null;
+        }
+        if (infoWindowRef.current) {
+          infoWindowRef.current.close();
+          infoWindowRef.current = null;
+        }
+      }
+    }
+  }, [isReportMode]);
+
+  // Load crime heatmap data
+  useEffect(() => {
+    if (activeLayers.heatmap && !heatmapData) {
+      processCrimeDataToGrid().then((data) => {
+        setHeatmapData(data);
+        heatmapDataRef.current = data;
+      }).catch((error) => {
+        console.error('Error loading heatmap data:', error);
+        toast.error('Failed to load heatmap data');
+      });
+    }
+  }, [activeLayers.heatmap, heatmapData]);
+
+  // Load lighting heatmap data
+  useEffect(() => {
+    if (activeLayers.lightingHeatmap && !lightingHeatmapData) {
+      processLightingDataToGrid().then((data) => {
+        setLightingHeatmapData(data);
+        lightingHeatmapDataRef.current = data;
+      }).catch((error) => {
+        console.error('Error loading lighting heatmap data:', error);
+        toast.error('Failed to load lighting heatmap data');
+      });
+    }
+  }, [activeLayers.lightingHeatmap, lightingHeatmapData]);
+
+  // Display/hide heatmap overlay
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    // Clear existing rectangles
+    heatmapRectanglesRef.current.forEach((rect) => rect.setMap(null));
+    heatmapRectanglesRef.current = [];
+
+    if (activeLayers.heatmap && heatmapData && heatmapData.cells.length > 0) {
+      // Add grid cells as rectangles (exact match to create_grid_map.py)
+      heatmapData.cells.forEach((cell) => {
+        const rectangle = new google.maps.Rectangle({
+          bounds: {
+            north: cell.latMax,
+            south: cell.latMin,
+            east: cell.lngMax,
+            west: cell.lngMin,
+          },
+          fillColor: cell.color,
+          fillOpacity: cell.opacity || 0.4, // Use opacity from data (matches create_grid_map.py)
+          strokeColor: 'gray',
+          strokeOpacity: 1.0,
+          strokeWeight: 0.3, // Matches create_grid_map.py weight
+          map: mapInstanceRef.current,
+        });
+
+        // Add click listener to show info (matching create_grid_map.py popup format)
+        rectangle.addListener('click', () => {
+          const infoWindow = new google.maps.InfoWindow({
+            content: `<div style="color: #000; padding: 8px;">
+              <b>Crimes:</b> ${cell.crimeCount}<br/>
+              <b>Percentile:</b> ${cell.percentile}th
+            </div>`,
+          });
+          infoWindow.setPosition({
+            lat: (cell.latMin + cell.latMax) / 2,
+            lng: (cell.lngMin + cell.lngMax) / 2,
+          });
+          infoWindow.open(mapInstanceRef.current);
+        });
+
+        heatmapRectanglesRef.current.push(rectangle);
+      });
+    }
+  }, [activeLayers.heatmap, heatmapData]);
+
+  // Display/hide lighting heatmap overlay
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    // Clear existing lighting rectangles
+    lightingHeatmapRectanglesRef.current.forEach((rect) => rect.setMap(null));
+    lightingHeatmapRectanglesRef.current = [];
+
+    if (activeLayers.lightingHeatmap && lightingHeatmapData && lightingHeatmapData.cells.length > 0) {
+      // Add grid cells as rectangles (exact match to create_lighting_map.py)
+      lightingHeatmapData.cells.forEach((cell) => {
+        const rectangle = new google.maps.Rectangle({
+          bounds: {
+            north: cell.latMax,
+            south: cell.latMin,
+            east: cell.lngMax,
+            west: cell.lngMin,
+          },
+          fillColor: cell.color,
+          fillOpacity: cell.opacity || 0.5, // Use opacity from data (matches create_lighting_map.py)
+          strokeColor: 'gray',
+          strokeOpacity: 1.0,
+          strokeWeight: 0.3, // Matches create_lighting_map.py weight
+          map: mapInstanceRef.current,
+        });
+
+        // Add click listener to show info (matching create_lighting_map.py popup format)
+        rectangle.addListener('click', () => {
+          const infoWindow = new google.maps.InfoWindow({
+            content: `<div style="color: #000; padding: 8px;">
+              <b>Streetlights:</b> ${cell.lightCount}<br/>
+              <b>Percentile:</b> ${cell.percentile}th
+            </div>`,
+          });
+          infoWindow.setPosition({
+            lat: (cell.latMin + cell.latMax) / 2,
+            lng: (cell.lngMin + cell.lngMax) / 2,
+          });
+          infoWindow.open(mapInstanceRef.current);
+        });
+
+        lightingHeatmapRectanglesRef.current.push(rectangle);
+      });
+    }
+  }, [activeLayers.lightingHeatmap, lightingHeatmapData]);
+
+  // Handle route calculation and rendering with safe waypoints
   useEffect(() => {
     if (!mapInstanceRef.current || !routeDestination || !userLocation) return;
     if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) return;
@@ -179,28 +479,63 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
 
     if (!directionsRenderer) return;
 
-    directionsService.route(
-      {
-        origin: new google.maps.LatLng(userLocation.lat, userLocation.lng),
-        destination: new google.maps.LatLng(routeDestination.lat, routeDestination.lng),
-        travelMode: google.maps.TravelMode.WALKING,
-      },
-      (result, status) => {
-        if (status === 'OK' && result) {
-          directionsRenderer.setDirections(result);
-          // Fit map to show entire route
-          const bounds = new google.maps.LatLngBounds();
-          result.routes[0].legs.forEach((leg) => {
-            bounds.extend(leg.start_location);
-            bounds.extend(leg.end_location);
-          });
-          mapInstanceRef.current?.fitBounds(bounds);
-        } else {
-          console.error('Directions request failed due to ' + status);
-        }
+    // If heatmap is active and data is loaded, use safe waypoints
+    const useSafeRoute = activeLayers.heatmap && heatmapDataRef.current && heatmapDataRef.current.cells.length > 0;
+
+    const routeRequest: google.maps.DirectionsRequest = {
+      origin: new google.maps.LatLng(userLocation.lat, userLocation.lng),
+      destination: new google.maps.LatLng(routeDestination.lat, routeDestination.lng),
+      travelMode: google.maps.TravelMode.WALKING,
+    };
+
+    if (useSafeRoute && heatmapDataRef.current) {
+      // Find safe waypoints
+      const waypoints = findSafeWaypoints(
+        userLocation,
+        routeDestination,
+        heatmapDataRef.current,
+        3
+      );
+
+      if (waypoints.length > 0) {
+        routeRequest.waypoints = waypoints.map((wp) => ({
+          location: wp,
+          stopover: false,
+        }));
+        routeRequest.optimizeWaypoints = false;
       }
-    );
-  }, [routeDestination, userLocation]);
+    }
+
+    directionsService.route(routeRequest, (result, status) => {
+      if (status === 'OK' && result) {
+        directionsRenderer.setDirections(result);
+        
+        // Calculate and display safety score if heatmap is active
+        if (useSafeRoute && heatmapDataRef.current && result.routes[0]) {
+          const path: google.maps.LatLng[] = [];
+          result.routes[0].overview_path.forEach((point) => {
+            path.push(point);
+          });
+          
+          const safety = getRouteSafetyScore(path, heatmapDataRef.current);
+          toast.success(
+            `Safe route calculated! Average safety: ${Math.round(safety.averageScore)}/100`
+          );
+        }
+        
+        // Fit map to show entire route
+        const bounds = new google.maps.LatLngBounds();
+        result.routes[0].legs.forEach((leg) => {
+          bounds.extend(leg.start_location);
+          bounds.extend(leg.end_location);
+        });
+        mapInstanceRef.current?.fitBounds(bounds);
+      } else {
+        console.error('Directions request failed due to ' + status);
+        toast.error('Failed to calculate route');
+      }
+    });
+  }, [routeDestination, userLocation, activeLayers.heatmap, heatmapData]);
 
   // Update markers based on active layers
   useEffect(() => {
@@ -316,6 +651,11 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
             <p className="text-muted-foreground">Loading map...</p>
           </div>
+        </div>
+      )}
+      {isReportMode && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+          <span className="text-sm font-semibold">📍 Click on the map to place your report</span>
         </div>
       )}
       <div ref={mapRef} className="w-full h-full rounded-lg" />
