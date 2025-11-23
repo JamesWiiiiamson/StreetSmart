@@ -7,7 +7,6 @@ import RouteOptions from '@/components/RouteOptions';
 import ReportButton from '@/components/ReportButton';
 import ReportModal from '@/components/ReportModal';
 import CommunityReports from '@/components/CommunityReports';
-import { Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { CommunityReport, generateReportId } from '@/lib/reportUtils';
 import { testBackend } from "../lib/api.js";
@@ -324,11 +323,15 @@ const Index = () => {
       <header className="fixed top-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-primary">
-              <Shield className="h-6 w-6 text-white" />
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-200 overflow-hidden">
+              <img 
+                src="/Hackwestern logo (3).png" 
+                alt="StreetSmart Logo" 
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">SafeRoute</h1>
+              <h1 className="text-xl font-bold text-foreground">StreetSmart</h1>
               <p className="text-xs text-muted-foreground">Intelligent Safety Navigation</p>
             </div>
           </div>

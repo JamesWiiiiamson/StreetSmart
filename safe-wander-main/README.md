@@ -1,6 +1,6 @@
-# SafeRoute - Intelligent Safety Routing App
+# StreetSmart - Intelligent Safety Routing App
 
-SafeRoute is a modern web application that helps users choose the safest walking route using Google Maps and contextual safety data. The app analyzes crime hotspots, lighting conditions, business activity, and provides emergency escape routing.
+StreetSmart is a modern web application that helps users choose the safest walking route using Google Maps and contextual safety data. The app analyzes crime hotspots, lighting conditions, business activity, and provides emergency escape routing.
 
 ## Features
 

@@ -156,7 +156,7 @@ const RouteOptions = ({ onRouteRequest, map, routeComparison, selectedRouteType,
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Label htmlFor="origin" className="text-sm text-foreground">
-            Starting Point (optional)
+            Starting Point
           </Label>
           <Input
             ref={originInputRef}
