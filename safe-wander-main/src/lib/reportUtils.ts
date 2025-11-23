@@ -13,13 +13,13 @@ export interface CommunityReport {
 export const REPORT_TYPES = {
   bad_lighting: {
     label: 'Bad Lighting',
-    description: 'Low visibility / missing streetlights',
+    description: 'Low visibility or missing lights',
     icon: 'lightbulb-off',
     color: '#fbbf24',
   },
   no_sidewalk: {
     label: 'No Sidewalk',
-    description: 'No sidewalk, broken sidewalk, or unsafe walking area',
+    description: 'No or broken sidewalk',
     icon: 'construction',
     color: '#f97316',
   },

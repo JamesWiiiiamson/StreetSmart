@@ -21,7 +21,6 @@ interface MapProps {
   lightingData?: any[];
   communityReports?: any[];
   activeLayers: {
-    businesses: boolean;
     userReports: boolean;
     heatmap: boolean;
     lightingHeatmap: boolean;

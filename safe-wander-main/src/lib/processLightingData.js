@@ -19,18 +19,18 @@ const LAT_MAX = 43.85;
 const LON_MIN = -79.64;
 const LON_MAX = -79.12;
 
-// Color mapping (exact from create_lighting_map.py)
+// Color mapping: Dark slate/blue for poorly lit, orange/yellow for well-lit
 function getLightingColor(count, percentiles) {
-  if (count <= percentiles[0]) return { color: '#1a1a2e', opacity: 0.7 }; // Very dark (poorly lit)
-  if (count <= percentiles[1]) return { color: '#16213e', opacity: 0.7 }; // Dark blue
-  if (count <= percentiles[2]) return { color: '#0f3460', opacity: 0.65 }; // Dark blue
-  if (count <= percentiles[3]) return { color: '#533483', opacity: 0.65 }; // Purple
-  if (count <= percentiles[4]) return { color: '#7c3aed', opacity: 0.6 }; // Light purple
-  if (count <= percentiles[5]) return { color: '#3b82f6', opacity: 0.6 }; // Blue
-  if (count <= percentiles[6]) return { color: '#0ea5e9', opacity: 0.55 }; // Light blue
-  if (count <= percentiles[7]) return { color: '#06b6d4', opacity: 0.55 }; // Cyan
-  if (count <= percentiles[8]) return { color: '#14b8a6', opacity: 0.5 }; // Teal
-  return { color: '#10b981', opacity: 0.5 }; // Green (well-lit)
+  if (count <= percentiles[0]) return { color: '#1e293b', opacity: 0.75 }; // Dark slate (poorly lit)
+  if (count <= percentiles[1]) return { color: '#334155', opacity: 0.7 }; // Slate gray
+  if (count <= percentiles[2]) return { color: '#475569', opacity: 0.65 }; // Medium slate
+  if (count <= percentiles[3]) return { color: '#64748b', opacity: 0.6 }; // Light slate
+  if (count <= percentiles[4]) return { color: '#dc2626', opacity: 0.55 }; // Red
+  if (count <= percentiles[5]) return { color: '#ea580c', opacity: 0.5 }; // Orange
+  if (count <= percentiles[6]) return { color: '#f97316', opacity: 0.45 }; // Light orange
+  if (count <= percentiles[7]) return { color: '#fb923c', opacity: 0.4 }; // Orange-yellow
+  if (count <= percentiles[8]) return { color: '#fbbf24', opacity: 0.35 }; // Yellow
+  return { color: '#fde047', opacity: 0.3 }; // Bright yellow (well-lit)
 }
 
 // Simple CSV parser that handles quoted fields
