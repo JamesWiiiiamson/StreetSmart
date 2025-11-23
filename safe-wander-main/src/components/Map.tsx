@@ -261,34 +261,181 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
             infoWindowRef.current.close();
           }
 
-          // Show info window with confirmation
+          // Get report type info for display
+          const reportTypeInfo: { [key: string]: { label: string; color: string } } = {
+            'bad_lighting': { label: 'Bad Lighting', color: '#fbbf24' },
+            'no_sidewalk': { label: 'No Sidewalk', color: '#f97316' },
+            'suspicious_area': { label: 'Suspicious Area', color: '#ef4444' },
+            'blocked_path': { label: 'Blocked Path', color: '#92400e' },
+          };
+          const reportInfo = reportTypeInfo[pendingReportType] || { label: 'Safety Issue', color: '#fbbf24' };
+
+          // Show info window with confirmation - styled to match theme, no white background
           const infoWindow = new google.maps.InfoWindow({
-            content: `<div style="color: #000; padding: 12px; text-align: center; min-width: 150px;">
-              <strong style="display: block; margin-bottom: 8px;">Place Report Here?</strong>
-              <button id="confirm-report" style="
-                background: #0ea5e9;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-weight: 600;
-                margin-right: 8px;
-              ">Confirm</button>
-              <button id="cancel-report" style="
-                background: #6b7280;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-weight: 600;
-              ">Cancel</button>
-            </div>`,
+            content: `
+              <div style="
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                padding: 0;
+                margin: 0;
+                min-width: 240px;
+                background: #1a1a1a;
+                border: 1px solid #2a2a2a;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+                overflow: hidden;
+              ">
+                <div style="
+                  background: #1a1a1a;
+                  padding: 16px;
+                  margin: 0;
+                ">
+                  <div style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 12px;
+                    padding-bottom: 12px;
+                    border-bottom: 1px solid #2a2a2a;
+                  ">
+                    <div style="
+                      width: 12px;
+                      height: 12px;
+                      border-radius: 50%;
+                      background-color: ${reportInfo.color};
+                      border: 2px solid #1a1a1a;
+                      box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+                      flex-shrink: 0;
+                    "></div>
+                    <strong style="
+                      color: #ffffff;
+                      font-size: 14px;
+                      font-weight: 600;
+                    ">Place ${reportInfo.label} Report?</strong>
+                  </div>
+                  <p style="
+                    color: #a0a0a0;
+                    font-size: 12px;
+                    margin: 0 0 16px 0;
+                    line-height: 1.5;
+                  ">Confirm to place your report at this location</p>
+                  <div style="
+                    display: flex;
+                    gap: 8px;
+                    justify-content: flex-end;
+                  ">
+                    <button id="cancel-report" style="
+                      background: #2a2a2a;
+                      color: #ffffff;
+                      border: 1px solid #3a3a3a;
+                      padding: 8px 16px;
+                      border-radius: 6px;
+                      cursor: pointer;
+                      font-weight: 500;
+                      font-size: 13px;
+                      transition: all 0.2s;
+                    " onmouseover="this.style.background='#333333'; this.style.borderColor='#444444'" onmouseout="this.style.background='#2a2a2a'; this.style.borderColor='#3a3a3a'">Cancel</button>
+                    <button id="confirm-report" style="
+                      background: #0ea5e9;
+                      color: #ffffff;
+                      border: none;
+                      padding: 8px 16px;
+                      border-radius: 6px;
+                      cursor: pointer;
+                      font-weight: 600;
+                      font-size: 13px;
+                      transition: all 0.2s;
+                    " onmouseover="this.style.background='#0284c7'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='#0ea5e9'; this.style.transform='scale(1)'">Confirm</button>
+                  </div>
+                </div>
+              </div>
+            `,
           });
 
           infoWindowRef.current = infoWindow;
           infoWindow.open(mapInstanceRef.current, tempMarker);
+          
+          // Aggressively remove white background and padding from InfoWindow
+          const removeWhiteBackground = () => {
+            // Remove padding and white background from all InfoWindow containers
+            const containers = document.querySelectorAll('.gm-style-iw-c, .gm-style-iw-d, .gm-style-iw-t, .gm-style-iw-tc');
+            containers.forEach((el) => {
+              const element = el as HTMLElement;
+              element.style.padding = '0';
+              element.style.background = 'transparent';
+              element.style.backgroundColor = 'transparent';
+              element.style.borderRadius = '0';
+              element.style.boxShadow = 'none';
+              element.style.border = 'none';
+            });
+            
+            // Target specific InfoWindow elements
+            const iwContainer = document.querySelector('.gm-style-iw-c');
+            if (iwContainer) {
+              (iwContainer as HTMLElement).style.padding = '0';
+              (iwContainer as HTMLElement).style.background = 'transparent';
+              (iwContainer as HTMLElement).style.backgroundColor = 'transparent';
+            }
+            
+            const iwContent = document.querySelector('.gm-style-iw-d');
+            if (iwContent) {
+              (iwContent as HTMLElement).style.overflow = 'visible';
+              (iwContent as HTMLElement).style.background = 'transparent';
+              (iwContent as HTMLElement).style.backgroundColor = 'transparent';
+              (iwContent as HTMLElement).style.padding = '0';
+            }
+            
+            // Remove white background from bubble
+            const bubble = document.querySelector('.gm-style-iw-t');
+            if (bubble) {
+              (bubble as HTMLElement).style.background = 'transparent';
+              (bubble as HTMLElement).style.backgroundColor = 'transparent';
+            }
+            
+            // Make the InfoWindow tip/arrow black
+            const tipContainer = document.querySelector('.gm-style-iw-tc');
+            if (tipContainer) {
+              (tipContainer as HTMLElement).style.background = 'transparent';
+              // The tip is created with ::after pseudo-element, so we need to use CSS
+            }
+            
+            // Inject CSS to override InfoWindow styles
+            const styleId = 'infowindow-dark-theme';
+            if (!document.getElementById(styleId)) {
+              const style = document.createElement('style');
+              style.id = styleId;
+              style.textContent = `
+                .gm-style-iw-c { padding: 0 !important; background: transparent !important; background-color: transparent !important; }
+                .gm-style-iw-d { padding: 0 !important; background: transparent !important; background-color: transparent !important; overflow: visible !important; }
+                .gm-style-iw-t { background: transparent !important; background-color: transparent !important; }
+                .gm-style-iw-tc { background: transparent !important; background-color: transparent !important; }
+                .gm-style-iw-t::after { background: #1a1a1a !important; border: 1px solid #2a2a2a !important; }
+                .gm-style-iw-tc::after { background: #1a1a1a !important; }
+              `;
+              document.head.appendChild(style);
+            }
+          };
+          
+          // Use MutationObserver to catch when InfoWindow is added
+          const observer = new MutationObserver(() => {
+            removeWhiteBackground();
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+          });
+          
+          // Try multiple times to catch the InfoWindow after it renders
+          setTimeout(() => {
+            removeWhiteBackground();
+            setTimeout(() => {
+              removeWhiteBackground();
+              setTimeout(() => {
+                removeWhiteBackground();
+                observer.disconnect();
+              }, 100);
+            }, 50);
+          }, 10);
 
           // Handle confirm button click
           setTimeout(() => {
