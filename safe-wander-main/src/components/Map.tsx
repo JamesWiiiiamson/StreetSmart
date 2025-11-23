@@ -140,6 +140,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: true,
+        clickableIcons: true, // Keep clickable icons enabled
       });
 
       // Add user location marker
@@ -391,11 +392,30 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
               (bubble as HTMLElement).style.backgroundColor = 'transparent';
             }
             
-            // Make the InfoWindow tip/arrow black
+            // Make the InfoWindow tip/arrow dark gray
             const tipContainer = document.querySelector('.gm-style-iw-tc');
             if (tipContainer) {
               (tipContainer as HTMLElement).style.background = 'transparent';
-              // The tip is created with ::after pseudo-element, so we need to use CSS
+            }
+            
+            // Make the close button white
+            const closeButton = document.querySelector('.gm-ui-hover-effect');
+            if (closeButton) {
+              const closeBtn = closeButton as HTMLElement;
+              closeBtn.style.color = '#ffffff';
+              closeBtn.style.fill = '#ffffff';
+              // Also target the SVG inside
+              const svg = closeButton.querySelector('svg');
+              if (svg) {
+                svg.style.fill = '#ffffff';
+                svg.style.color = '#ffffff';
+              }
+              // Target all paths inside
+              const paths = closeButton.querySelectorAll('path');
+              paths.forEach((path) => {
+                path.style.fill = '#ffffff';
+                path.style.stroke = '#ffffff';
+              });
             }
             
             // Inject CSS to override InfoWindow styles
@@ -410,6 +430,9 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
                 .gm-style-iw-tc { background: transparent !important; background-color: transparent !important; }
                 .gm-style-iw-t::after { background: #1a1a1a !important; border: 1px solid #2a2a2a !important; }
                 .gm-style-iw-tc::after { background: #1a1a1a !important; }
+                .gm-ui-hover-effect { color: #ffffff !important; fill: #ffffff !important; }
+                .gm-ui-hover-effect svg { fill: #ffffff !important; color: #ffffff !important; }
+                .gm-ui-hover-effect path { fill: #ffffff !important; stroke: #ffffff !important; }
               `;
               document.head.appendChild(style);
             }
@@ -816,8 +839,8 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
 
     const routeRequest: google.maps.DirectionsRequest = {
       origin: new google.maps.LatLng(origin.lat, origin.lng),
-      destination: new google.maps.LatLng(routeDestination.lat, routeDestination.lng),
-      travelMode: google.maps.TravelMode.WALKING,
+        destination: new google.maps.LatLng(routeDestination.lat, routeDestination.lng),
+        travelMode: google.maps.TravelMode.WALKING,
       provideRouteAlternatives: true, // Request multiple route alternatives
     };
 
@@ -881,13 +904,13 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
             routePolylinesRef.current.push(singlePolyline);
 
             // Fit map
-            const bounds = new google.maps.LatLngBounds();
+          const bounds = new google.maps.LatLngBounds();
             singleRoute.legs.forEach((leg) => {
-              bounds.extend(leg.start_location);
-              bounds.extend(leg.end_location);
-            });
-            mapInstanceRef.current?.fitBounds(bounds);
-          } else {
+            bounds.extend(leg.start_location);
+            bounds.extend(leg.end_location);
+          });
+          mapInstanceRef.current?.fitBounds(bounds);
+        } else {
             // Multiple routes - display based on selection
             const routeToDisplay = selectedRouteType && comparison[selectedRouteType]
               ? comparison[selectedRouteType]
@@ -1036,30 +1059,109 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
         const totalVotes = report.upvotes + report.downvotes;
         const confidenceScore = totalVotes > 0 ? Math.round((report.upvotes / totalVotes) * 100) : 0;
         const isHighConfidence = confidenceScore >= 70;
-        
+
         const infoWindow = new google.maps.InfoWindow({
-          content: `<div style="color: #000; padding: 12px; max-width: 280px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-              <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${getReportColor(report.type)}; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
-              <strong style="font-size: 14px; color: #1f2937;">${reportTypeLabels[report.type] || report.type.replace('_', ' ')}</strong>
-            </div>
-            <p style="margin: 8px 0; font-size: 13px; color: #374151; line-height: 1.4; word-wrap: break-word;">${report.description}</p>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-              <div style="font-size: 11px; color: #6b7280;">
-                <div>👍 ${report.upvotes} | 👎 ${report.downvotes}</div>
-                <div style="margin-top: 4px; color: ${isHighConfidence ? '#10b981' : '#6b7280'};">
-                  ${confidenceScore}% confidence
+          content: `
+            <div style="
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              padding: 0;
+              margin: 0;
+              min-width: 280px;
+              background: #1a1a1a;
+              border-radius: 8px;
+            ">
+              <div style="
+                background: #1a1a1a;
+                border: 1px solid #2a2a2a;
+                border-radius: 8px;
+                padding: 16px;
+                margin: 0;
+                position: relative;
+              ">
+                <button id="close-report-info-${report.id}" style="
+                  position: absolute;
+                  top: 12px;
+                  right: 12px;
+                  background: transparent;
+                  border: none;
+                  color: #ffffff;
+                  font-size: 20px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  width: 24px;
+                  height: 24px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  padding: 0;
+                  line-height: 1;
+                  z-index: 10;
+                " onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">×</button>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #2a2a2a; padding-right: 32px;">
+                  <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${getReportColor(report.type)}; border: 2px solid #1a1a1a; box-shadow: 0 0 0 1px rgba(255,255,255,0.1); flex-shrink: 0;"></div>
+                  <strong style="font-size: 14px; color: #ffffff; font-weight: 600;">${reportTypeLabels[report.type] || report.type.replace('_', ' ')}</strong>
+                </div>
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: #a0a0a0; line-height: 1.5; word-wrap: break-word;">${report.description}</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid #2a2a2a;">
+                  <div style="font-size: 11px; color: #9ca3af;">
+                    <div style="margin-bottom: 4px;">👍 ${report.upvotes} | 👎 ${report.downvotes}</div>
+                    <div style="color: ${isHighConfidence ? '#10b981' : '#9ca3af'};">
+                      ${confidenceScore}% confidence
+                    </div>
+                  </div>
+                  <div style="font-size: 11px; color: #9ca3af;">
+                    ${getTimeAgo(report.timestamp)}
+                  </div>
                 </div>
               </div>
-              <div style="font-size: 11px; color: #9ca3af;">
-                ${getTimeAgo(report.timestamp)}
-              </div>
             </div>
-          </div>`,
+          `,
         });
 
         marker.addListener('click', () => {
           infoWindow.open(mapInstanceRef.current, marker);
+          
+          // Remove white background from InfoWindow and hide default close button
+          setTimeout(() => {
+            const containers = document.querySelectorAll('.gm-style-iw-c, .gm-style-iw-d, .gm-style-iw-t, .gm-style-iw-tc');
+            containers.forEach((el) => {
+              const element = el as HTMLElement;
+              element.style.padding = '0';
+              element.style.background = 'transparent';
+              element.style.backgroundColor = 'transparent';
+            });
+            
+            // Hide the default Google Maps close button
+            const closeButton = document.querySelector('.gm-ui-hover-effect');
+            if (closeButton) {
+              (closeButton as HTMLElement).style.display = 'none';
+            }
+            
+            // Set up close button click handler
+            const closeBtn = document.getElementById(`close-report-info-${report.id}`);
+            if (closeBtn) {
+              closeBtn.onclick = () => {
+                infoWindow.close();
+              };
+            }
+            
+            // Inject CSS to override InfoWindow styles and hide default close button
+            const styleId = 'infowindow-dark-theme-markers';
+            if (!document.getElementById(styleId)) {
+              const style = document.createElement('style');
+              style.id = styleId;
+              style.textContent = `
+                .gm-style-iw-c { padding: 0 !important; background: transparent !important; background-color: transparent !important; }
+                .gm-style-iw-d { padding: 0 !important; background: transparent !important; background-color: transparent !important; overflow: visible !important; }
+                .gm-style-iw-t { background: transparent !important; background-color: transparent !important; }
+                .gm-style-iw-tc { background: transparent !important; background-color: transparent !important; }
+                .gm-style-iw-t::after { background: #1a1a1a !important; border: 1px solid #2a2a2a !important; }
+                .gm-style-iw-tc::after { background: #1a1a1a !important; }
+                .gm-ui-hover-effect { display: none !important; }
+              `;
+              document.head.appendChild(style);
+            }
+          }, 50);
         });
 
         markersRef.current.push(marker);
