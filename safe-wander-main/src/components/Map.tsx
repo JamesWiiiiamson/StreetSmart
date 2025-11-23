@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { processCrimeDataToGrid, HeatmapData, findSafeWaypoints, getRouteSafetyScore, processLightingDataToGrid, LightingHeatmapData, compareRoutes, RouteComparison, scoreRoute } from '@/lib/heatmapUtils';
+import { getTimeAgo } from '@/lib/reportUtils';
 
 // Helper function to get marker icon (custom image or default symbol)
 const getMarkerIcon = (type: 'image' | 'symbol', imagePath?: string, symbolConfig?: google.maps.Symbol) => {
@@ -410,12 +411,37 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
           map: mapInstanceRef.current,
         });
 
-        // Add click listener to show info (matching create_grid_map.py popup format)
+        // Add click listener to show detailed info
         rectangle.addListener('click', () => {
+          const safetyLevel = cell.percentile <= 20 ? 'Very Safe' : 
+                              cell.percentile <= 40 ? 'Safe' : 
+                              cell.percentile <= 60 ? 'Moderate' : 
+                              cell.percentile <= 80 ? 'Caution' : 'High Risk';
+          const safetyColor = cell.percentile <= 20 ? '#10b981' : 
+                              cell.percentile <= 40 ? '#22c55e' : 
+                              cell.percentile <= 60 ? '#eab308' : 
+                              cell.percentile <= 80 ? '#f97316' : '#ef4444';
+          
           const infoWindow = new google.maps.InfoWindow({
-            content: `<div style="color: #000; padding: 8px;">
-              <b>Crimes:</b> ${cell.crimeCount}<br/>
-              <b>Percentile:</b> ${cell.percentile}th
+            content: `<div style="color: #000; padding: 12px; max-width: 250px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <div style="width: 16px; height: 16px; border-radius: 4px; background-color: ${cell.color}; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
+                <strong style="font-size: 15px; color: #1f2937;">Crime Density</strong>
+              </div>
+              <div style="margin-bottom: 8px;">
+                <div style="font-size: 13px; color: #374151; margin-bottom: 4px;">
+                  <b>Crime Count:</b> ${cell.crimeCount}
+                </div>
+                <div style="font-size: 13px; color: #374151; margin-bottom: 4px;">
+                  <b>Percentile Rank:</b> ${cell.percentile}th percentile
+                </div>
+                <div style="font-size: 13px; margin-top: 6px; padding: 6px; background-color: #f3f4f6; border-radius: 4px;">
+                  <b style="color: ${safetyColor};">Safety Level:</b> <span style="color: ${safetyColor}; font-weight: 600;">${safetyLevel}</span>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: #6b7280; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+                Data from last 365 days
+              </div>
             </div>`,
           });
           infoWindow.setPosition({
@@ -456,12 +482,37 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
           map: mapInstanceRef.current,
         });
 
-        // Add click listener to show info (matching create_lighting_map.py popup format)
+        // Add click listener to show detailed info
         rectangle.addListener('click', () => {
+          const lightingLevel = cell.percentile >= 80 ? 'Very Well Lit' : 
+                                cell.percentile >= 60 ? 'Well Lit' : 
+                                cell.percentile >= 40 ? 'Moderate' : 
+                                cell.percentile >= 20 ? 'Poorly Lit' : 'Very Poorly Lit';
+          const lightingColor = cell.percentile >= 80 ? '#10b981' : 
+                                cell.percentile >= 60 ? '#22c55e' : 
+                                cell.percentile >= 40 ? '#eab308' : 
+                                cell.percentile >= 20 ? '#f97316' : '#ef4444';
+          
           const infoWindow = new google.maps.InfoWindow({
-            content: `<div style="color: #000; padding: 8px;">
-              <b>Streetlights:</b> ${cell.lightCount}<br/>
-              <b>Percentile:</b> ${cell.percentile}th
+            content: `<div style="color: #000; padding: 12px; max-width: 250px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <div style="width: 16px; height: 16px; border-radius: 4px; background-color: ${cell.color}; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
+                <strong style="font-size: 15px; color: #1f2937;">Street Lighting</strong>
+              </div>
+              <div style="margin-bottom: 8px;">
+                <div style="font-size: 13px; color: #374151; margin-bottom: 4px;">
+                  <b>Streetlight Count:</b> ${cell.lightCount}
+                </div>
+                <div style="font-size: 13px; color: #374151; margin-bottom: 4px;">
+                  <b>Percentile Rank:</b> ${cell.percentile}th percentile
+                </div>
+                <div style="font-size: 13px; margin-top: 6px; padding: 6px; background-color: #f3f4f6; border-radius: 4px;">
+                  <b style="color: ${lightingColor};">Lighting Level:</b> <span style="color: ${lightingColor}; font-weight: 600;">${lightingLevel}</span>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: #6b7280; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+                Based on streetlight density data
+              </div>
             </div>`,
           });
           infoWindow.setPosition({
@@ -827,11 +878,37 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
           title: report.description,
         });
 
+        // Format report type for display
+        const reportTypeLabels: { [key: string]: string } = {
+          'bad_lighting': 'Bad Lighting',
+          'no_sidewalk': 'No Sidewalk',
+          'suspicious_area': 'Suspicious Area',
+          'blocked_path': 'Blocked Path',
+        };
+        
+        // Calculate confidence score
+        const totalVotes = report.upvotes + report.downvotes;
+        const confidenceScore = totalVotes > 0 ? Math.round((report.upvotes / totalVotes) * 100) : 0;
+        const isHighConfidence = confidenceScore >= 70;
+        
         const infoWindow = new google.maps.InfoWindow({
-          content: `<div style="color: #000; padding: 8px; max-width: 200px;">
-            <strong>${report.type.replace('_', ' ').toUpperCase()}</strong><br/>
-            ${report.description}<br/>
-            <small>👍 ${report.upvotes} | 👎 ${report.downvotes}</small>
+          content: `<div style="color: #000; padding: 12px; max-width: 280px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${getReportColor(report.type)}; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.1);"></div>
+              <strong style="font-size: 14px; color: #1f2937;">${reportTypeLabels[report.type] || report.type.replace('_', ' ')}</strong>
+            </div>
+            <p style="margin: 8px 0; font-size: 13px; color: #374151; line-height: 1.4; word-wrap: break-word;">${report.description}</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+              <div style="font-size: 11px; color: #6b7280;">
+                <div>👍 ${report.upvotes} | 👎 ${report.downvotes}</div>
+                <div style="margin-top: 4px; color: ${isHighConfidence ? '#10b981' : '#6b7280'};">
+                  ${confidenceScore}% confidence
+                </div>
+              </div>
+              <div style="font-size: 11px; color: #9ca3af;">
+                ${getTimeAgo(report.timestamp)}
+              </div>
+            </div>
           </div>`,
         });
 

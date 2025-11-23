@@ -10,7 +10,7 @@ const ReportButton = ({ onClick }: ReportButtonProps) => {
     <Button
       onClick={onClick}
       size="lg"
-      className="absolute bottom-6 left-6 z-40 h-14 px-6 rounded-full bg-gradient-primary hover:opacity-90 shadow-glow transition-all hover:scale-105"
+      className="absolute bottom-6 left-6 z-50 h-14 px-6 rounded-full bg-gradient-primary hover:opacity-90 shadow-glow transition-all hover:scale-105 pointer-events-auto"
       aria-label="Report safety issue"
     >
       <Plus className="h-5 w-5 mr-2" />
