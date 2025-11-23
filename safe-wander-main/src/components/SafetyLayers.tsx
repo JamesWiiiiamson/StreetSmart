@@ -1,16 +1,15 @@
-import { Layers, Lightbulb, Store, Users, Map } from 'lucide-react';
+import { Layers, Lightbulb, Users, Map } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
 interface SafetyLayersProps {
   activeLayers: {
-    businesses: boolean;
     userReports: boolean;
     heatmap: boolean;
     lightingHeatmap: boolean;
   };
-  onLayerToggle: (layer: 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => void;
+  onLayerToggle: (layer: 'userReports' | 'heatmap' | 'lightingHeatmap') => void;
 }
 
 const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
@@ -22,20 +21,6 @@ const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Store className="h-4 w-4 text-accent" />
-            <Label htmlFor="business-layer" className="cursor-pointer">
-              Open Businesses
-            </Label>
-          </div>
-          <Switch
-            id="business-layer"
-            checked={activeLayers.businesses}
-            onCheckedChange={() => onLayerToggle('businesses')}
-          />
-        </div>
-
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-accent" />
@@ -119,15 +104,15 @@ const SafetyLayers = ({ activeLayers, onLayerToggle }: SafetyLayersProps) => {
             <h4 className="text-sm font-medium mb-3 text-foreground">Lighting Heatmap</h4>
             <div className="space-y-1 text-xs">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4" style={{ backgroundColor: '#10b981' }}></div>
+                <div className="w-4 h-4" style={{ backgroundColor: '#fbbf24' }}></div>
                 <span className="text-muted-foreground">Well Lit (90-100%)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4" style={{ backgroundColor: '#0ea5e9' }}></div>
+                <div className="w-4 h-4" style={{ backgroundColor: '#f97316' }}></div>
                 <span className="text-muted-foreground">Good (60-70%)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4" style={{ backgroundColor: '#1a1a2e' }}></div>
+                <div className="w-4 h-4" style={{ backgroundColor: '#1e293b' }}></div>
                 <span className="text-muted-foreground">Poorly Lit (0-10%)</span>
               </div>
             </div>

@@ -54,17 +54,18 @@ export interface LightingHeatmapData {
 }
 
 // Color mapping based on percentile (from create_grid_map.py)
+// Enhanced scoring to create more differentiation between safest and worst routes
 const COLOR_MAP = [
-  { maxPercentile: 10, color: '#FFFFCC', safetyScore: 95 }, // Very light yellow (safest)
-  { maxPercentile: 20, color: '#FFFF99', safetyScore: 90 },
-  { maxPercentile: 30, color: '#FFFF66', safetyScore: 85 },
-  { maxPercentile: 40, color: '#FFED4E', safetyScore: 80 },
-  { maxPercentile: 50, color: '#FFDB4D', safetyScore: 75 },
-  { maxPercentile: 60, color: '#FFC04D', safetyScore: 70 },
-  { maxPercentile: 70, color: '#FF9933', safetyScore: 60 },
-  { maxPercentile: 80, color: '#FF6B1A', safetyScore: 45 },
-  { maxPercentile: 90, color: '#FF3300', safetyScore: 30 },
-  { maxPercentile: 100, color: '#CC0000', safetyScore: 10 }, // Dark red (most dangerous)
+  { maxPercentile: 10, color: '#FFFFCC', safetyScore: 100 }, // Very light yellow (safest) - increased from 95
+  { maxPercentile: 20, color: '#FFFF99', safetyScore: 92 }, // Increased from 90
+  { maxPercentile: 30, color: '#FFFF66', safetyScore: 85 }, // Same
+  { maxPercentile: 40, color: '#FFED4E', safetyScore: 75 }, // Decreased from 80
+  { maxPercentile: 50, color: '#FFDB4D', safetyScore: 65 }, // Decreased from 75
+  { maxPercentile: 60, color: '#FFC04D', safetyScore: 55 }, // Decreased from 70
+  { maxPercentile: 70, color: '#FF9933', safetyScore: 40 }, // Decreased from 60
+  { maxPercentile: 80, color: '#FF6B1A', safetyScore: 25 }, // Decreased from 45
+  { maxPercentile: 90, color: '#FF3300', safetyScore: 12 }, // Decreased from 30
+  { maxPercentile: 100, color: '#CC0000', safetyScore: 5 }, // Dark red (most dangerous) - decreased from 10
 ];
 
 /**
@@ -403,13 +404,44 @@ export const scoreRoute = (
   });
 
   // Score based on crime heatmap
+  // Use weighted average that penalizes dangerous areas more heavily
   let crimeSafetyScore = 50; // Default if no data
   let minCrimeScore = 50;
   if (crimeHeatmap && path.length > 0) {
     const crimeScores = path.map((point) =>
       getSafetyScoreAtLocation(point.lat(), point.lng(), crimeHeatmap)
     );
-    crimeSafetyScore = crimeScores.reduce((sum, score) => sum + score, 0) / crimeScores.length;
+    
+    // Use a non-linear transformation to emphasize differences
+    // Lower scores get penalized more, higher scores get rewarded more
+    const transformedScores = crimeScores.map(score => {
+      if (score >= 80) {
+        // Boost safe areas (80-100 -> 85-100)
+        return 85 + (score - 80) * 0.75;
+      } else if (score >= 50) {
+        // Moderate areas stay roughly the same
+        return score;
+      } else {
+        // Penalize dangerous areas more (0-50 -> 0-40)
+        return score * 0.8;
+      }
+    });
+    
+    // Weighted average: give more weight to worst segments
+    const weights = crimeScores.map(score => {
+      // Lower scores get higher weight (more important to avoid)
+      return 100 - score;
+    });
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+    
+    if (totalWeight > 0) {
+      crimeSafetyScore = transformedScores.reduce((sum, score, i) => 
+        sum + score * (weights[i] / totalWeight), 0
+      );
+    } else {
+      crimeSafetyScore = transformedScores.reduce((sum, score) => sum + score, 0) / transformedScores.length;
+    }
+    
     minCrimeScore = Math.min(...crimeScores);
   }
 
@@ -422,15 +454,32 @@ export const scoreRoute = (
     lightingScore = lightingScores.reduce((sum, score) => sum + score, 0) / lightingScores.length;
   }
 
-  // Combined safety score: 60% crime safety, 40% lighting
-  // Both are 0-100, so weighted average
-  const combinedSafetyScore = crimeHeatmap && lightingHeatmap
-    ? crimeSafetyScore * 0.6 + lightingScore * 0.4
+  // Combined safety score: 70% crime safety, 30% lighting
+  // Increased crime weight to make it more impactful
+  // Apply non-linear scaling to further differentiate routes
+  let combinedSafetyScore = crimeHeatmap && lightingHeatmap
+    ? crimeSafetyScore * 0.7 + lightingScore * 0.3
     : crimeHeatmap
     ? crimeSafetyScore
     : lightingHeatmap
     ? lightingScore
     : 50;
+  
+  // Apply exponential scaling to create more dramatic differences
+  // Safe routes (70+) get boosted, dangerous routes (30-) get penalized more
+  if (combinedSafetyScore >= 70) {
+    // Boost safe routes: 70-100 -> 75-100
+    combinedSafetyScore = 75 + (combinedSafetyScore - 70) * 0.83;
+  } else if (combinedSafetyScore >= 40) {
+    // Moderate routes stay similar
+    combinedSafetyScore = combinedSafetyScore;
+  } else {
+    // Penalize dangerous routes more: 0-40 -> 0-30
+    combinedSafetyScore = combinedSafetyScore * 0.75;
+  }
+  
+  // Ensure score stays in 0-100 range
+  combinedSafetyScore = Math.max(0, Math.min(100, combinedSafetyScore));
 
   return {
     route,

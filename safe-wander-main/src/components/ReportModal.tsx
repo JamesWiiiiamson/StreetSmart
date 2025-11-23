@@ -73,7 +73,7 @@ const ReportModal = ({ open, onClose, onSubmit }: ReportModalProps) => {
           <DialogTitle className="text-foreground">
             {step === 'select' ? 'Report Safety Issue' : 'Add Details'}
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogDescription className="text-muted-foreground text-sm">
             {step === 'select'
               ? 'Select the type of safety issue you want to report'
               : 'Add additional details (optional) and tap the map to place your report'}
@@ -81,7 +81,7 @@ const ReportModal = ({ open, onClose, onSubmit }: ReportModalProps) => {
         </DialogHeader>
 
         {step === 'select' ? (
-          <div className="grid grid-cols-2 gap-3 py-4">
+          <div className="grid grid-cols-2 gap-3 py-2">
             {Object.entries(REPORT_TYPES).map(([key, value]) => {
               const Icon = getIcon(key);
               return (
@@ -89,14 +89,14 @@ const ReportModal = ({ open, onClose, onSubmit }: ReportModalProps) => {
                   key={key}
                   onClick={() => handleTypeSelect(key)}
                   variant="outline"
-                  className="h-auto flex-col gap-3 p-4 hover:border-primary hover:bg-secondary"
+                  className="h-auto flex-col gap-3 p-4 hover:border-primary hover:bg-secondary transition-all"
                 >
-                  <Icon className="h-8 w-8" style={{ color: value.color }} />
-                  <div className="text-center">
-                    <div className="font-semibold text-sm text-foreground mb-1">
+                  <Icon className="h-8 w-8 shrink-0" style={{ color: value.color }} />
+                  <div className="flex flex-col gap-1.5 w-full items-center">
+                    <div className="font-semibold text-sm text-foreground">
                       {value.label}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground text-center leading-snug px-1">
                       {value.description}
                     </div>
                   </div>
@@ -105,19 +105,21 @@ const ReportModal = ({ open, onClose, onSubmit }: ReportModalProps) => {
             })}
           </div>
         ) : (
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg border border-border">
+          <div className="space-y-4 py-2">
+            <div className="flex items-start gap-3 p-4 bg-secondary rounded-lg border border-border">
               {selectedType && (() => {
                 const Icon = getIcon(selectedType);
                 const reportType = REPORT_TYPES[selectedType as keyof typeof REPORT_TYPES];
                 return (
                   <>
-                    <Icon className="h-6 w-6" style={{ color: reportType.color }} />
-                    <div className="flex-1">
-                      <div className="font-semibold text-sm text-foreground">
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: `${reportType.color}20` }}>
+                      <Icon className="h-5 w-5 shrink-0" style={{ color: reportType.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-base text-foreground mb-1.5">
                         {reportType.label}
                       </div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-sm text-muted-foreground leading-relaxed">
                         {reportType.description}
                       </div>
                     </div>

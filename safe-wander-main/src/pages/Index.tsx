@@ -16,7 +16,6 @@ import { RouteComparison } from '@/lib/heatmapUtils';
 
 const Index = () => {
   const [activeLayers, setActiveLayers] = useState({
-    businesses: false,
     userReports: true,
     heatmap: false,
     lightingHeatmap: false,
@@ -173,7 +172,7 @@ const Index = () => {
     };
   }, [userLocation, mapInstance, loadNearbyPlaces]);
 
-  const handleLayerToggle = (layer: 'businesses' | 'userReports' | 'heatmap' | 'lightingHeatmap') => {
+  const handleLayerToggle = (layer: 'userReports' | 'heatmap' | 'lightingHeatmap') => {
     setActiveLayers((prev) => ({
       ...prev,
       [layer]: !prev[layer],
