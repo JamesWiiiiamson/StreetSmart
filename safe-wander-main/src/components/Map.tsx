@@ -233,7 +233,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
               case 'bad_lighting': return '#fbbf24';
               case 'no_sidewalk': return '#f97316';
               case 'suspicious_area': return '#ef4444';
-              case 'blocked_path': return '#dc2626';
+              case 'blocked_path': return '#92400e';
               default: return '#0ea5e9';
             }
           };
@@ -858,7 +858,7 @@ const Map = ({ onMapLoad, crimeData = [], lightingData = [], communityReports = 
             case 'bad_lighting': return '#fbbf24';
             case 'no_sidewalk': return '#f97316';
             case 'suspicious_area': return '#ef4444';
-            case 'blocked_path': return '#dc2626';
+            case 'blocked_path': return '#92400e';
             default: return '#fbbf24';
           }
         };

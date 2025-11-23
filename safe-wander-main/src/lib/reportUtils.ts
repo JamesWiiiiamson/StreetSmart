@@ -33,7 +33,7 @@ export const REPORT_TYPES = {
     label: 'Blocked Path',
     description: 'Construction, debris, or blockage',
     icon: 'octagon',
-    color: '#dc2626',
+    color: '#92400e',
   },
 } as const;
 
