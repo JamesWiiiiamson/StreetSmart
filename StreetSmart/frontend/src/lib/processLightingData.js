@@ -158,7 +158,7 @@ function processCSV(csvPath) {
 }
 
 // Main execution
-const csvPath = path.join(__dirname, '../../../../heatmap/heatmap/synthetic_streetlight_data.csv');
+const csvPath = path.join(__dirname, '../../../backend/heatmap/heatmap/synthetic_streetlight_data.csv');
 const outputPath = path.join(__dirname, '../../public/data/lighting-grid.json');
 
 try {
