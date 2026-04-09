@@ -1,0 +1,7 @@
+# Tell GitHub Linguist to ignore these generated data maps from the language statistics
+StreetSmart/backend/heatmap/heatmap/*.html linguist-generated=true
+
+# Ignore other massive auto-generated files from the language stats
+*.lock linguist-generated=true
+bun.lockb linguist-generated=true
+*-lock.json linguist-generated=true
