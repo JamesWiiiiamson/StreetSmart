@@ -19,7 +19,6 @@ lerna-debug.log*
 .env.test
 .env.production
 .env.*
-.gitattributes*
 
 # Editor configurations
 .vscode/*
